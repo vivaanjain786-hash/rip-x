@@ -1,0 +1,5 @@
+{
+  "name": "baseline-ring-10",
+  "topology": "ring",
+  "routers": 10
+}
