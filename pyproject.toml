@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rip-x"
+version = "0.1.0"
+description = "Reproducible RIP distance-vector routing simulator"
+requires-python = ">=3.10"
+dependencies = ["networkx>=3.2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
