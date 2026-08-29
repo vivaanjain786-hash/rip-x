@@ -1,0 +1,9 @@
+{
+  "name": "congestion-line",
+  "topology": "line",
+  "routers": 4,
+  "flows": [
+    {"source": "R1", "destination": "R4", "rate_mbps": 120},
+    {"source": "R2", "destination": "R4", "rate_mbps": 40}
+  ]
+}

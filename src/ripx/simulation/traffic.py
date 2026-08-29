@@ -21,6 +21,8 @@ class TrafficReport:
     delivered_mbps: float
     dropped_mbps: float
     unroutable_mbps: float
+    maximum_utilization: float
+    bottleneck_links: list[str]
 
 
 def simulate_traffic(network: RipNetwork, flows: list[TrafficFlow]) -> TrafficReport:
@@ -63,4 +65,8 @@ def simulate_traffic(network: RipNetwork, flows: list[TrafficFlow]) -> TrafficRe
                 delivery_ratio *= link.bandwidth_mbps / loads[link_key]
         delivered += flow.rate_mbps * delivery_ratio
     offered = sum(flow.rate_mbps for flow in flows)
-    return TrafficReport(utilization, paths, delivered, offered - delivered, unroutable)
+    maximum_utilization = max(utilization.values(), default=0.0)
+    bottlenecks = sorted(label for label, value in utilization.items() if value == maximum_utilization)
+    return TrafficReport(
+        utilization, paths, delivered, offered - delivered, unroutable, maximum_utilization, bottlenecks
+    )

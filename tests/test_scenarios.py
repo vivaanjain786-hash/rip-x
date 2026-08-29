@@ -53,3 +53,21 @@ def test_failure_scenario_measures_each_reconvergence(tmp_path):
         "router_failure",
         "router_recovery",
     ]
+
+
+def test_congestion_scenario_reports_measured_bottleneck(tmp_path):
+    source = tmp_path / "congestion.json"
+    source.write_text(
+        json.dumps(
+            {
+                "name": "congestion",
+                "topology": "line",
+                "routers": 3,
+                "flows": [{"source": "R1", "destination": "R3", "rate_mbps": 150}],
+            }
+        )
+    )
+    result = run_scenario(source)
+    traffic = result["phases"][0]["traffic"]
+    assert traffic["maximum_utilization"] == 1.5
+    assert traffic["dropped_mbps"] > 0

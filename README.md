@@ -26,6 +26,8 @@ Scenario files are JSON with a name, a baseline topology (`line`, `ring`, `star`
 
 Failure scenarios can also contain ordered `router_failure`, `router_recovery`, `link_failure`, and `link_recovery` events. Each event produces a separate measured re-convergence phase.
 
+Traffic scenarios add `flows` with a source, destination, and offered `rate_mbps`. Each experiment phase reports delivered, dropped, and unroutable traffic along with bottleneck links and maximum utilization.
+
 ## Scope
 
 RIP remains the routing foundation. RIP-X is a research simulator for small, controlled networks; it does not replace OSPF, BGP, or public-Internet routing.

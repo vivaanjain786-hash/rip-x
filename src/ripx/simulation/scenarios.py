@@ -15,6 +15,13 @@ class FaultEvent:
 
 
 @dataclass(frozen=True)
+class FlowSpec:
+    source: str
+    destination: str
+    rate_mbps: float
+
+
+@dataclass(frozen=True)
 class Scenario:
     name: str
     topology: str
@@ -22,6 +29,7 @@ class Scenario:
     seed: int = 0
     edge_probability: float = 0.25
     events: tuple[FaultEvent, ...] = ()
+    flows: tuple[FlowSpec, ...] = ()
 
 
 def load_scenario(path: str | Path) -> Scenario:
@@ -67,4 +75,19 @@ def load_scenario(path: str | Path) -> Scenario:
             events.append(FaultEvent(event_type, link=(link[0], link[1])))
         else:
             raise ValueError(f"event {index} has an unsupported type")
-    return Scenario(data["name"], data["topology"], data["routers"], seed, float(probability), tuple(events))
+    flows_data = data.get("flows", [])
+    if not isinstance(flows_data, list):
+        raise ValueError("flows must be a list")
+    flows: list[FlowSpec] = []
+    for index, flow in enumerate(flows_data):
+        if not isinstance(flow, dict):
+            raise ValueError(f"flow {index} must be an object")
+        source, destination, rate = flow.get("source"), flow.get("destination"), flow.get("rate_mbps")
+        if not isinstance(source, str) or not isinstance(destination, str):
+            raise ValueError(f"flow {index} requires source and destination routers")
+        if not isinstance(rate, (int, float)) or rate < 0:
+            raise ValueError(f"flow {index} requires a non-negative rate_mbps")
+        flows.append(FlowSpec(source, destination, float(rate)))
+    return Scenario(
+        data["name"], data["topology"], data["routers"], seed, float(probability), tuple(events), tuple(flows)
+    )
