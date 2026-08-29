@@ -33,6 +33,7 @@ class RipNetwork:
         self.poison_reverse = poison_reverse
         self.routers: dict[str, RipRouter] = {}
         self.links: dict[frozenset[str], Link] = {}
+        self.failed_routers: set[str] = set()
         self.now = 0
 
     def add_router(self, name: str) -> None:
@@ -52,9 +53,13 @@ class RipNetwork:
         self.links[key] = Link(left, right, **telemetry)
 
     def neighbors(self, router: str) -> list[str]:
+        if router in self.failed_routers:
+            return []
         result: list[str] = []
         for link in self.links.values():
             if not link.up:
+                continue
+            if link.left in self.failed_routers or link.right in self.failed_routers:
                 continue
             if link.left == router:
                 result.append(link.right)
@@ -76,6 +81,28 @@ class RipNetwork:
         self.routers[left].triggered = True
         self.routers[right].triggered = True
 
+    def fail_router(self, router: str) -> None:
+        """Take a router offline and poison routes that depend on it."""
+        if router not in self.routers:
+            raise ValueError(f"router {router!r} does not exist")
+        if router in self.failed_routers:
+            return
+        previous_neighbors = self.neighbors(router)
+        self.failed_routers.add(router)
+        for neighbor in previous_neighbors:
+            self.routers[neighbor].withdraw_neighbor(router, self.now)
+
+    def recover_router(self, router: str) -> None:
+        """Return a failed router to service and trigger neighbor exchanges."""
+        if router not in self.routers:
+            raise ValueError(f"router {router!r} does not exist")
+        if router not in self.failed_routers:
+            return
+        self.failed_routers.remove(router)
+        self.routers[router].triggered = True
+        for neighbor in self.neighbors(router):
+            self.routers[neighbor].triggered = True
+
     def step(self) -> ConvergenceResult:
         """Deliver a snapshot of every active router's vector to each neighbor."""
         outgoing = [
@@ -83,14 +110,16 @@ class RipNetwork:
             for source in sorted(self.routers)
             for neighbor in self.neighbors(source)
         ]
-        for router in self.routers.values():
-            router.triggered = False
+        for name, router in self.routers.items():
+            if name not in self.failed_routers:
+                router.triggered = False
         self.now += 1
         changed = False
         for source, target, vector in outgoing:
             changed = self.routers[target].receive(source, vector, self.now) or changed
-        for router in self.routers.values():
-            changed = router.age_routes(self.now) or changed
+        for name, router in self.routers.items():
+            if name not in self.failed_routers:
+                changed = router.age_routes(self.now) or changed
         return ConvergenceResult(1, len(outgoing), changed)
 
     def converge(self, max_rounds: int = 100) -> ConvergenceResult:

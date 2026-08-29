@@ -9,7 +9,7 @@ RIP-X is a reproducible Python simulator for studying RIP-based distance-vector 
 - Bellman-Ford baseline for route validation
 - RIP hop-count routing with maximum metric 16
 - Split horizon with poison reverse, triggered updates, route poisoning, route timeout, and garbage collection
-- Link failure and recovery injection
+- Link and router failure/recovery injection
 - Reproducible convergence experiments and automated tests
 
 ## Quick start

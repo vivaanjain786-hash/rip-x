@@ -46,3 +46,18 @@ def test_timeout_invalidates_silent_learned_route_then_collects_it():
     assert router.route("R3").metric == INFINITY
     router.age_routes(now=2)
     assert router.route("R3") is None
+
+
+def test_router_failure_poison_routes_and_recovery_restores_them():
+    network = ring(4)
+    network.converge()
+
+    network.fail_router("R2")
+    network.converge()
+    assert network.routers["R1"].route("R2").metric == INFINITY
+    assert "R2" in network.failed_routers
+
+    network.recover_router("R2")
+    network.converge()
+    assert network.routers["R1"].route("R2").metric == 1
+    assert "R2" not in network.failed_routers
