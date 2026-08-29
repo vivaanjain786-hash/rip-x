@@ -103,6 +103,32 @@ class RipNetwork:
         for neighbor in self.neighbors(router):
             self.routers[neighbor].triggered = True
 
+    def route_path(self, source: str, destination: str) -> list[str] | None:
+        """Follow the current RIP next hops to return a forwarding path.
+
+        Returning ``None`` means the destination cannot be safely forwarded to
+        using the current table. This also detects an unexpected forwarding
+        loop rather than reporting a fabricated path.
+        """
+        if source not in self.routers or destination not in self.routers:
+            raise ValueError("source and destination must be existing routers")
+        if source in self.failed_routers or destination in self.failed_routers:
+            return None
+        path = [source]
+        current = source
+        while current != destination:
+            route = self.routers[current].route(destination)
+            if route is None or not route.reachable or route.next_hop is None:
+                return None
+            next_hop = route.next_hop
+            if next_hop not in self.neighbors(current) or next_hop in path:
+                return None
+            path.append(next_hop)
+            current = next_hop
+            if len(path) > len(self.routers):
+                return None
+        return path
+
     def step(self) -> ConvergenceResult:
         """Deliver a snapshot of every active router's vector to each neighbor."""
         outgoing = [

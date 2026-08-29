@@ -10,6 +10,7 @@ RIP-X is a reproducible Python simulator for studying RIP-based distance-vector 
 - RIP hop-count routing with maximum metric 16
 - Split horizon with poison reverse, triggered updates, route poisoning, route timeout, and garbage collection
 - Link and router failure/recovery injection
+- RIP-path traffic accounting with per-link utilization and delivery metrics
 - Reproducible convergence experiments and automated tests
 
 ## Quick start
