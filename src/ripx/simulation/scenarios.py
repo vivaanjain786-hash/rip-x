@@ -8,12 +8,20 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
+class FaultEvent:
+    type: str
+    router: str | None = None
+    link: tuple[str, str] | None = None
+
+
+@dataclass(frozen=True)
 class Scenario:
     name: str
     topology: str
     routers: int
     seed: int = 0
     edge_probability: float = 0.25
+    events: tuple[FaultEvent, ...] = ()
 
 
 def load_scenario(path: str | Path) -> Scenario:
@@ -39,4 +47,24 @@ def load_scenario(path: str | Path) -> Scenario:
         raise ValueError("seed must be an integer")
     if not isinstance(probability, (int, float)) or not 0 <= probability <= 1:
         raise ValueError("edge_probability must be between 0 and 1")
-    return Scenario(data["name"], data["topology"], data["routers"], seed, float(probability))
+    events_data = data.get("events", [])
+    if not isinstance(events_data, list):
+        raise ValueError("events must be a list")
+    events: list[FaultEvent] = []
+    for index, event in enumerate(events_data):
+        if not isinstance(event, dict):
+            raise ValueError(f"event {index} must be an object")
+        event_type = event.get("type")
+        if event_type in {"router_failure", "router_recovery"}:
+            router = event.get("router")
+            if not isinstance(router, str) or not router:
+                raise ValueError(f"event {index} requires a router name")
+            events.append(FaultEvent(event_type, router=router))
+        elif event_type in {"link_failure", "link_recovery"}:
+            link = event.get("link")
+            if not isinstance(link, list) or len(link) != 2 or not all(isinstance(node, str) for node in link):
+                raise ValueError(f"event {index} requires a two-router link")
+            events.append(FaultEvent(event_type, link=(link[0], link[1])))
+        else:
+            raise ValueError(f"event {index} has an unsupported type")
+    return Scenario(data["name"], data["topology"], data["routers"], seed, float(probability), tuple(events))

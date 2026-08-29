@@ -1,0 +1,9 @@
+{
+  "name": "router-failure-ring",
+  "topology": "ring",
+  "routers": 5,
+  "events": [
+    {"type": "router_failure", "router": "R2"},
+    {"type": "router_recovery", "router": "R2"}
+  ]
+}

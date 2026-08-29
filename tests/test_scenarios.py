@@ -30,3 +30,26 @@ def test_seeded_random_scenario_is_reproducible(tmp_path):
         json.dumps({"name": "seeded", "topology": "random", "routers": 12, "seed": 42, "edge_probability": 0.2})
     )
     assert run_scenario(source) == run_scenario(source)
+
+
+def test_failure_scenario_measures_each_reconvergence(tmp_path):
+    source = tmp_path / "failure.json"
+    source.write_text(
+        json.dumps(
+            {
+                "name": "failure-test",
+                "topology": "ring",
+                "routers": 5,
+                "events": [
+                    {"type": "router_failure", "router": "R2"},
+                    {"type": "router_recovery", "router": "R2"},
+                ],
+            }
+        )
+    )
+    result = run_scenario(source)
+    assert [phase["event"] for phase in result["phases"]] == [
+        "baseline",
+        "router_failure",
+        "router_recovery",
+    ]
