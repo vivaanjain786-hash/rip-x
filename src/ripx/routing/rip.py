@@ -44,6 +44,7 @@ class RipRouter:
         self.routes: dict[str, Route] = {name: Route(name, 0, None, None, 0)}
         self.last_heard: dict[tuple[str, str], int] = {}
         self.triggered = True
+        self.route_change_count = 0
 
     def route(self, destination: str) -> Route | None:
         return self.routes.get(destination)
@@ -81,6 +82,7 @@ class RipRouter:
                 # refreshes liveness above but is not a routing-table change.
                 if current is None or current.metric != candidate or current.learned_from != neighbor:
                     self.routes[destination] = replacement
+                    self.route_change_count += 1
                     changed = True
         self.triggered = self.triggered or changed
         return changed
@@ -91,6 +93,7 @@ class RipRouter:
         for destination, route in list(self.routes.items()):
             if route.learned_from == neighbor and route.metric != INFINITY:
                 self.routes[destination] = replace(route, metric=INFINITY, changed_at=now, invalid_since=now)
+                self.route_change_count += 1
                 changed = True
         self.triggered = self.triggered or changed
         return changed
@@ -105,9 +108,11 @@ class RipRouter:
                 heard_at = self.last_heard.get((route.learned_from, destination), route.changed_at)
                 if now - heard_at >= self.route_timeout:
                     self.routes[destination] = replace(route, metric=INFINITY, changed_at=now, invalid_since=now)
+                    self.route_change_count += 1
                     changed = True
             elif route.invalid_since is not None and now - route.invalid_since >= self.garbage_collection:
                 del self.routes[destination]
+                self.route_change_count += 1
                 changed = True
         self.triggered = self.triggered or changed
         return changed
