@@ -25,3 +25,5 @@ Scenario files are JSON with a name, a baseline topology (`line`, `ring`, `star`
 ## Scope
 
 RIP remains the routing foundation. RIP-X is a research simulator for small, controlled networks; it does not replace OSPF, BGP, or public-Internet routing.
+
+For a short review presentation, run [the RIP failure-and-recovery demo](docs/review-demo.md).
