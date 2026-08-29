@@ -6,10 +6,10 @@ import json
 from pathlib import Path
 
 from ripx.simulation.scenarios import Scenario, load_scenario
-from ripx.simulation.topologies import line, ring, star
+from ripx.simulation.topologies import line, mesh, random_connected, ring, star
 
 
-FACTORIES = {"line": line, "ring": ring, "star": star}
+FACTORIES = {"line": line, "ring": ring, "star": star, "mesh": mesh}
 
 
 def run_convergence_experiment(topology: str, size: int) -> dict[str, int | str]:
@@ -26,7 +26,20 @@ def run_convergence_experiment(topology: str, size: int) -> dict[str, int | str]
 def run_scenario(path: str | Path) -> dict[str, int | str]:
     """Run one file-backed scenario and include its human-readable identifier."""
     scenario: Scenario = load_scenario(path)
-    result = run_convergence_experiment(scenario.topology, scenario.routers)
+    if scenario.topology == "random":
+        network = random_connected(
+            scenario.routers, seed=scenario.seed, edge_probability=scenario.edge_probability
+        )
+        convergence = network.converge()
+        result: dict[str, int | str] = {
+            "topology": "random",
+            "routers": scenario.routers,
+            "convergence_rounds": convergence.rounds,
+            "control_messages": convergence.control_messages,
+            "seed": scenario.seed,
+        }
+    else:
+        result = run_convergence_experiment(scenario.topology, scenario.routers)
     return {"scenario": scenario.name, **result}
 
 

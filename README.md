@@ -4,7 +4,7 @@ RIP-X is a reproducible Python simulator for studying RIP-based distance-vector 
 
 ## Current baseline
 
-- Deterministic line, ring, and star topologies
+- Deterministic line, ring, star, mesh, and seeded random topologies
 - Router and link abstraction with bandwidth, latency, and packet-loss fields
 - Bellman-Ford baseline for route validation
 - RIP hop-count routing with maximum metric 16
@@ -20,7 +20,7 @@ python -m pytest
 python -m ripx scenarios/baseline-ring-10.json --output results/baseline-ring-10.json
 ```
 
-Scenario files are JSON with a name, one baseline topology (`line`, `ring`, or `star`), and a router count. Reports capture only measured simulator values; RIP-X makes no performance claims from unrun experiments.
+Scenario files are JSON with a name, a baseline topology (`line`, `ring`, `star`, `mesh`, or `random`), and a router count. Random scenarios also accept a seed and edge probability. Reports capture only measured simulator values; RIP-X makes no performance claims from unrun experiments.
 
 ## Scope
 

@@ -1,0 +1,7 @@
+{
+  "name": "baseline-random-25-seed-42",
+  "topology": "random",
+  "routers": 25,
+  "seed": 42,
+  "edge_probability": 0.2
+}

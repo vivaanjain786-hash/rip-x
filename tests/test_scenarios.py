@@ -22,3 +22,11 @@ def test_rejects_unknown_topology(tmp_path):
     source.write_text(json.dumps({"name": "bad", "topology": "mesh", "routers": 4}))
     with pytest.raises(ValueError, match="baseline topology"):
         load_scenario(source)
+
+
+def test_seeded_random_scenario_is_reproducible(tmp_path):
+    source = tmp_path / "random.json"
+    source.write_text(
+        json.dumps({"name": "seeded", "topology": "random", "routers": 12, "seed": 42, "edge_probability": 0.2})
+    )
+    assert run_scenario(source) == run_scenario(source)
