@@ -12,6 +12,8 @@ class FaultEvent:
     type: str
     router: str | None = None
     link: tuple[str, str] | None = None
+    latency_ms: float | None = None
+    packet_loss: float | None = None
 
 
 @dataclass(frozen=True)
@@ -68,11 +70,22 @@ def load_scenario(path: str | Path) -> Scenario:
             if not isinstance(router, str) or not router:
                 raise ValueError(f"event {index} requires a router name")
             events.append(FaultEvent(event_type, router=router))
-        elif event_type in {"link_failure", "link_recovery"}:
+        elif event_type in {"link_failure", "link_recovery", "latency_spike", "packet_loss_spike", "link_restore"}:
             link = event.get("link")
             if not isinstance(link, list) or len(link) != 2 or not all(isinstance(node, str) for node in link):
                 raise ValueError(f"event {index} requires a two-router link")
-            events.append(FaultEvent(event_type, link=(link[0], link[1])))
+            if event_type == "latency_spike":
+                latency = event.get("latency_ms")
+                if not isinstance(latency, (int, float)) or latency < 0:
+                    raise ValueError(f"event {index} requires a non-negative latency_ms")
+                events.append(FaultEvent(event_type, link=(link[0], link[1]), latency_ms=float(latency)))
+            elif event_type == "packet_loss_spike":
+                loss = event.get("packet_loss")
+                if not isinstance(loss, (int, float)) or not 0 <= loss <= 1:
+                    raise ValueError(f"event {index} requires packet_loss between 0 and 1")
+                events.append(FaultEvent(event_type, link=(link[0], link[1]), packet_loss=float(loss)))
+            else:
+                events.append(FaultEvent(event_type, link=(link[0], link[1])))
         else:
             raise ValueError(f"event {index} has an unsupported type")
     flows_data = data.get("flows", [])

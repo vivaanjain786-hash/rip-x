@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import replace
 
 from ripx.routing.rip import RipRouter
 
@@ -33,6 +34,7 @@ class RipNetwork:
         self.poison_reverse = poison_reverse
         self.routers: dict[str, RipRouter] = {}
         self.links: dict[frozenset[str], Link] = {}
+        self.link_baselines: dict[frozenset[str], Link] = {}
         self.failed_routers: set[str] = set()
         self.now = 0
 
@@ -50,7 +52,9 @@ class RipNetwork:
         if left == right or left not in self.routers or right not in self.routers:
             raise ValueError("links must connect two existing, distinct routers")
         key = frozenset((left, right))
-        self.links[key] = Link(left, right, **telemetry)
+        link = Link(left, right, **telemetry)
+        self.links[key] = link
+        self.link_baselines[key] = link
 
     def neighbors(self, router: str) -> list[str]:
         if router in self.failed_routers:
@@ -80,6 +84,43 @@ class RipNetwork:
         self.links[key] = Link(link.left, link.right, link.bandwidth_mbps, link.latency_ms, link.packet_loss, True)
         self.routers[left].triggered = True
         self.routers[right].triggered = True
+
+    def set_link_conditions(
+        self,
+        left: str,
+        right: str,
+        *,
+        latency_ms: float | None = None,
+        packet_loss: float | None = None,
+        bandwidth_mbps: float | None = None,
+    ) -> None:
+        """Change measurable link conditions without changing RIP hop cost."""
+        key = frozenset((left, right))
+        link = self.links[key]
+        if latency_ms is not None and latency_ms < 0:
+            raise ValueError("latency_ms must not be negative")
+        if packet_loss is not None and not 0 <= packet_loss <= 1:
+            raise ValueError("packet_loss must be between 0 and 1")
+        if bandwidth_mbps is not None and bandwidth_mbps <= 0:
+            raise ValueError("bandwidth_mbps must be positive")
+        self.links[key] = replace(
+            link,
+            latency_ms=link.latency_ms if latency_ms is None else latency_ms,
+            packet_loss=link.packet_loss if packet_loss is None else packet_loss,
+            bandwidth_mbps=link.bandwidth_mbps if bandwidth_mbps is None else bandwidth_mbps,
+        )
+
+    def restore_link_conditions(self, left: str, right: str) -> None:
+        """Restore a link's baseline telemetry values while preserving its state."""
+        key = frozenset((left, right))
+        current = self.links[key]
+        baseline = self.link_baselines[key]
+        self.links[key] = replace(
+            current,
+            bandwidth_mbps=baseline.bandwidth_mbps,
+            latency_ms=baseline.latency_ms,
+            packet_loss=baseline.packet_loss,
+        )
 
     def fail_router(self, router: str) -> None:
         """Take a router offline and poison routes that depend on it."""

@@ -64,6 +64,12 @@ def _apply_event(network, event: FaultEvent) -> None:
         network.fail_link(*event.link)
     elif event.type == "link_recovery":
         network.recover_link(*event.link)
+    elif event.type == "latency_spike":
+        network.set_link_conditions(*event.link, latency_ms=event.latency_ms)
+    elif event.type == "packet_loss_spike":
+        network.set_link_conditions(*event.link, packet_loss=event.packet_loss)
+    elif event.type == "link_restore":
+        network.restore_link_conditions(*event.link)
 
 
 def run_failure_scenario(scenario: Scenario) -> dict[str, object]:

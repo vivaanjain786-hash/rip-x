@@ -1,0 +1,13 @@
+{
+  "name": "link-impairment-ring",
+  "topology": "ring",
+  "routers": 5,
+  "flows": [
+    {"source": "R1", "destination": "R3", "rate_mbps": 20}
+  ],
+  "events": [
+    {"type": "packet_loss_spike", "link": ["R1", "R2"], "packet_loss": 0.25},
+    {"type": "link_restore", "link": ["R1", "R2"]},
+    {"type": "latency_spike", "link": ["R1", "R2"], "latency_ms": 100}
+  ]
+}

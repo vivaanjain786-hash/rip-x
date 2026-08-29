@@ -71,3 +71,24 @@ def test_congestion_scenario_reports_measured_bottleneck(tmp_path):
     traffic = result["phases"][0]["traffic"]
     assert traffic["maximum_utilization"] == 1.5
     assert traffic["dropped_mbps"] > 0
+
+
+def test_impairment_scenario_reports_loss_then_restoration(tmp_path):
+    source = tmp_path / "impairment.json"
+    source.write_text(
+        json.dumps(
+            {
+                "name": "impairment",
+                "topology": "ring",
+                "routers": 4,
+                "flows": [{"source": "R1", "destination": "R3", "rate_mbps": 20}],
+                "events": [
+                    {"type": "packet_loss_spike", "link": ["R1", "R2"], "packet_loss": 0.25},
+                    {"type": "link_restore", "link": ["R1", "R2"]},
+                ],
+            }
+        )
+    )
+    phases = run_scenario(source)["phases"]
+    assert phases[1]["traffic"]["delivered_mbps"] == 15.0
+    assert phases[2]["traffic"]["delivered_mbps"] == 20.0
