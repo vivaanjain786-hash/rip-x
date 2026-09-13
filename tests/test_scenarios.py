@@ -19,7 +19,7 @@ def test_loads_and_runs_a_file_backed_scenario(tmp_path):
 
 def test_rejects_unknown_topology(tmp_path):
     source = tmp_path / "scenario.json"
-    source.write_text(json.dumps({"name": "bad", "topology": "mesh", "routers": 4}))
+    source.write_text(json.dumps({"name": "bad", "topology": "tree", "routers": 4}))
     with pytest.raises(ValueError, match="baseline topology"):
         load_scenario(source)
 
@@ -92,3 +92,35 @@ def test_impairment_scenario_reports_loss_then_restoration(tmp_path):
     phases = run_scenario(source)["phases"]
     assert phases[1]["traffic"]["delivered_mbps"] == 15.0
     assert phases[2]["traffic"]["delivered_mbps"] == 20.0
+
+
+def test_scale_free_scenario_loads_and_runs(tmp_path):
+    source = tmp_path / "sf.json"
+    source.write_text(
+        json.dumps({"name": "sf-test", "topology": "scale_free", "routers": 12, "seed": 7})
+    )
+    result = run_scenario(source)
+    assert result["scenario"] == "sf-test"
+    assert result["routers"] == 12
+    assert result["convergence_rounds"] >= 1
+
+
+def test_enterprise_scenario_has_ten_routers(tmp_path):
+    source = tmp_path / "ent.json"
+    source.write_text(json.dumps({"name": "ent-test", "topology": "enterprise"}))
+    result = run_scenario(source)
+    assert result["scenario"] == "ent-test"
+    assert result["routers"] == 10
+    assert result["convergence_rounds"] >= 1
+
+
+def test_iot_edge_scenario_derives_router_count(tmp_path):
+    """Router count = 1 GW + hubs + (hubs × devices)."""
+    source = tmp_path / "iot.json"
+    source.write_text(
+        json.dumps({"name": "iot-test", "topology": "iot_edge", "edge_hubs": 2, "devices_per_hub": 3})
+    )
+    result = run_scenario(source)
+    assert result["scenario"] == "iot-test"
+    # 1 + 2 + 2*3 = 9
+    assert result["routers"] == 9

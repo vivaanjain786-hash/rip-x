@@ -1,0 +1,9 @@
+{
+  "name": "count-to-infinity",
+  "topology": "line",
+  "routers": 3,
+  "events": [
+    {"type": "link_failure", "link": ["R2", "R3"]},
+    {"type": "link_recovery", "link": ["R2", "R3"]}
+  ]
+}
