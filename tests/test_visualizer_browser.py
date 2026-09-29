@@ -1,0 +1,73 @@
+"""End-to-end check that the browser visualizer is driven by the Python engine.
+
+Skipped when Playwright or a Chromium build is not available.
+"""
+
+import os
+import threading
+
+import pytest
+
+sync_api = pytest.importorskip("playwright.sync_api")
+
+from ripx.server import create_server  # noqa: E402
+
+
+def _chromium_path():
+    for candidate in ("/opt/pw-browsers/chromium", os.environ.get("RIPX_CHROMIUM", "")):
+        if candidate and os.path.exists(candidate):
+            return candidate
+    return None
+
+
+@pytest.fixture()
+def page():
+    server = create_server("127.0.0.1", 0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    with sync_api.sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(executable_path=_chromium_path())
+        except Exception as error:  # no browser installed
+            server.shutdown()
+            pytest.skip(f"Chromium unavailable: {error}")
+        page = browser.new_page(viewport={"width": 1500, "height": 900})
+        page.errors = []
+        page.on("pageerror", lambda error: page.errors.append(str(error)))
+        page.goto(f"http://127.0.0.1:{server.server_address[1]}/")
+        page.wait_for_function("document.getElementById('engineVal').textContent !== '…'")
+        yield page
+        browser.close()
+    server.shutdown()
+    server.server_close()
+
+
+def test_page_uses_the_python_engine_and_converges(page):
+    assert page.inner_text("#engineVal") == "Python"
+    for _ in range(6):
+        page.click("#btnStep")
+        page.wait_for_timeout(150)
+    assert page.inner_text("#convergenceStatusText") == "Network Converged"
+    assert page.inner_text("#activeRoutesVal") == "25"  # 5 routers x 5 destinations
+    assert page.errors == []
+
+
+def test_failing_a_router_updates_the_page_from_engine_state(page):
+    for _ in range(6):
+        page.click("#btnStep")
+        page.wait_for_timeout(150)
+    page.click("#btnToggleNodeState")
+    page.wait_for_function("document.getElementById('inspectorStatus').textContent.startsWith('FAILED')")
+    page.wait_for_timeout(400)
+    assert page.inner_text("#activeRoutesVal") != "25"
+    assert page.errors == []
+
+
+def test_switching_profile_reloads_the_network_with_ripx_settings(page):
+    page.select_option("#profileSelect", "ripx")
+    page.wait_for_function("document.getElementById('eventLogContainer').textContent.includes('Profile ripx')")
+    for _ in range(30):
+        page.click("#btnStep")
+        page.wait_for_timeout(60)
+    page.wait_for_timeout(300)
+    assert "updates every" in page.inner_text("#inspectorStatus")
+    assert page.errors == []

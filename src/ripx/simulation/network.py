@@ -55,6 +55,9 @@ class RipNetwork:
         self.cost_policy = cost_policy if cost_policy is not None else HopCountCost()
         self.link_costs: dict[frozenset[str], int] = {}
         self.link_utilization: dict[frozenset[str], float] = {}
+        # Advertisements (source, target) and route requests sent in the last round.
+        self.last_messages: list[tuple[str, str]] = []
+        self.last_requests: list[tuple[str, str]] = []
         self._change_counts: dict[str, int] = {}
         self._periodic_change_counts: dict[str, int] = {}
         self.routers: dict[str, RipRouter] = {}
@@ -84,6 +87,18 @@ class RipNetwork:
         self.links[key] = link
         self.link_baselines[key] = link
         self.link_costs[key] = self._compute_cost(key)
+
+    def configure_link(self, left: str, right: str, **properties: float) -> None:
+        """Set a link's baseline bandwidth, latency or packet loss."""
+        key = frozenset((left, right))
+        if key not in self.links:
+            raise ValueError(f"unknown link {left}-{right}")
+        allowed = {"bandwidth_mbps", "latency_ms", "packet_loss"}
+        unknown = set(properties) - allowed
+        if unknown:
+            raise ValueError(f"unknown link properties: {', '.join(sorted(unknown))}")
+        self.set_link_conditions(left, right, **properties)
+        self.link_baselines[key] = replace(self.link_baselines[key], **properties)
 
     def neighbors(self, router: str) -> list[str]:
         if router in self.failed_routers:
@@ -301,14 +316,16 @@ class RipNetwork:
         # RIP-X: a router that lost a route asks its neighbors for their full
         # tables, so an alternative path is heard without waiting for their
         # next periodic update. Neighbors answer in the following round.
-        requests = 0
+        requests: list[tuple[str, str]] = []
         for name, router in self.routers.items():
             if router.lost_route:
                 router.lost_route = False
                 if self.request_on_loss and name not in self.failed_routers:
                     for neighbor in self.neighbors(name):
                         self.routers[neighbor].triggered = True
-                        requests += 1
+                        requests.append((name, neighbor))
+        self.last_messages = [(source, target) for source, target, _ in outgoing]
+        self.last_requests = requests
         # Only routers that advertised have delivered their pending changes.
         for name in senders:
             router = self.routers[name]
@@ -326,7 +343,7 @@ class RipNetwork:
             if name not in self.failed_routers:
                 changed = router.age_routes(self.now) or changed
         self._record_route_changes()
-        return ConvergenceResult(1, len(outgoing) + requests, changed)
+        return ConvergenceResult(1, len(outgoing) + len(requests), changed)
 
     def converge(self, max_rounds: int = 100) -> ConvergenceResult:
         messages = 0

@@ -38,6 +38,10 @@
           <span class="metric-label">Active Routes</span>
           <span class="metric-value" id="activeRoutesVal">0</span>
         </div>
+        <div class="metric-chip" title="Which engine computes routing: the Python RIP-X engine (python -m ripx.server) or the standalone in-browser fallback">
+          <span class="metric-label">Engine</span>
+          <span class="metric-value" id="engineVal">…</span>
+        </div>
       </div>
     </header>
 
@@ -84,7 +88,23 @@
       </div>
 
       <div class="control-group">
+        <span class="group-label">Protocol Profile</span>
+        <select id="profileSelect" class="form-select" title="Needs the Python engine">
+          <option value="baseline" selected>Baseline (update every round)</option>
+          <option value="rip">Standard RIP (fixed 5-round updates)</option>
+          <option value="ripx">RIP-X (adaptive + congestion-aware)</option>
+        </select>
+      </div>
+
+      <div class="control-group">
         <span class="group-label">Protocol Settings</span>
+        <div class="toggle-wrapper">
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggleSplitHorizon" checked>
+            <span class="slider"></span>
+          </label>
+          <span class="toggle-label" title="Do not advertise a route back to the neighbor it was learned from">Split Horizon</span>
+        </div>
         <div class="toggle-wrapper">
           <label class="toggle-switch">
             <input type="checkbox" id="togglePoisonReverse" checked>

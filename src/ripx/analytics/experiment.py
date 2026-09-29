@@ -6,7 +6,9 @@ import json
 from pathlib import Path
 
 from ripx.analytics.telemetry import collect_telemetry
-from ripx.routing.bellman_ford import shortest_paths
+from ripx.config import describe_options, network_options, resolve_config
+from ripx.analytics.validation import expected_metrics
+from ripx.routing.rip import INFINITY
 from ripx.simulation.scenarios import FaultEvent, Scenario, load_scenario
 from ripx.simulation.topologies import (
     enterprise_like,
@@ -19,6 +21,7 @@ from ripx.simulation.topologies import (
     star,
 )
 from ripx.simulation.traffic import TrafficFlow, simulate_traffic
+from ripx.simulation.traffic_engineering import engineer_traffic
 
 
 FACTORIES = {
@@ -53,38 +56,29 @@ def run_bellman_ford_validation(topology: str, size: int) -> dict[str, object]:
     """
     network = FACTORIES[topology](size)
     network.converge()
+    return {"topology": topology, "routers": size, **validate_against_bellman_ford(network)}
 
-    # Build undirected edge list with hop cost = 1 for each active link
-    active_links: list[tuple[str, str, int]] = []
-    for link in network.links.values():
-        if link.up:
-            active_links.append((link.left, link.right, 1))
-            active_links.append((link.right, link.left, 1))
 
-    router_names = list(network.routers.keys())
+def validate_against_bellman_ford(network) -> dict[str, object]:
+    """Compare a network's current RIP metrics with Bellman-Ford over its link costs."""
+    expected = expected_metrics(network)
     mismatches: list[dict[str, object]] = []
-    for source in router_names:
-        bf_paths = shortest_paths(router_names, active_links, source)
-        for destination in router_names:
-            if destination == source:
-                continue
+    for source, row in expected.items():
+        for destination, bf_metric in row.items():
             rip_route = network.routers[source].route(destination)
             rip_metric = rip_route.metric if rip_route is not None else None
-            bf_metric = bf_paths[destination].metric
-            # Convert inf to a sentinel for JSON serialisation
-            bf_metric_val = None if bf_metric == float("inf") else int(bf_metric)
-            if rip_metric != bf_metric_val:
+            if rip_metric == INFINITY and bf_metric is None:
+                continue
+            if rip_metric != bf_metric:
                 mismatches.append(
                     {
                         "source": source,
                         "destination": destination,
                         "rip_metric": rip_metric,
-                        "bellman_ford_metric": bf_metric_val,
+                        "bellman_ford_metric": bf_metric,
                     }
                 )
     return {
-        "topology": topology,
-        "routers": size,
         "mismatches": mismatches,
         "valid": len(mismatches) == 0,
     }
@@ -93,7 +87,7 @@ def run_bellman_ford_validation(topology: str, size: int) -> dict[str, object]:
 def run_scenario(path: str | Path) -> dict[str, object]:
     """Run one file-backed scenario and include its human-readable identifier."""
     scenario: Scenario = load_scenario(path)
-    if scenario.events or scenario.flows:
+    if scenario.events or scenario.flows or scenario.rip is not None or scenario.links:
         return run_failure_scenario(scenario)
     topology = scenario.topology
     if topology == "random":
@@ -145,23 +139,28 @@ def run_scenario(path: str | Path) -> dict[str, object]:
     return {"scenario": scenario.name, **result}
 
 
-def _build_network(scenario: Scenario):
+def _build_network(scenario: Scenario, options: dict[str, object] | None = None):
+    options = options if options is not None else network_options(scenario.rip)
     topology = scenario.topology
     if topology == "random":
-        return random_connected(
-            scenario.routers, seed=scenario.seed, edge_probability=scenario.edge_probability
+        network = random_connected(
+            scenario.routers, seed=scenario.seed, edge_probability=scenario.edge_probability, **options
         )
-    if topology == "scale_free":
-        return scale_free(
-            scenario.routers, seed=scenario.seed, initial_clique=scenario.initial_clique
+    elif topology == "scale_free":
+        network = scale_free(
+            scenario.routers, seed=scenario.seed, initial_clique=scenario.initial_clique, **options
         )
-    if topology == "enterprise":
-        return enterprise_like()
-    if topology == "iot_edge":
-        return iot_edge_like(
-            edge_hubs=scenario.edge_hubs, devices_per_hub=scenario.devices_per_hub
+    elif topology == "enterprise":
+        network = enterprise_like(**options)
+    elif topology == "iot_edge":
+        network = iot_edge_like(
+            edge_hubs=scenario.edge_hubs, devices_per_hub=scenario.devices_per_hub, **options
         )
-    return FACTORIES[topology](scenario.routers)
+    else:
+        network = FACTORIES[topology](scenario.routers, **options)
+    for spec in scenario.links:
+        network.configure_link(*spec.link, **spec.properties())
+    return network
 
 
 def _apply_event(network, event: FaultEvent) -> None:
@@ -183,27 +182,49 @@ def _apply_event(network, event: FaultEvent) -> None:
 
 def run_failure_scenario(scenario: Scenario) -> dict[str, object]:
     """Measure baseline and re-convergence with optional traffic telemetry."""
-    network = _build_network(scenario)
+    options = network_options(scenario.rip)
+    network = _build_network(scenario, options)
     baseline = network.converge()
     flows = [TrafficFlow(flow.source, flow.destination, flow.rate_mbps) for flow in scenario.flows]
-    phases = [_measure_phase(network, "baseline", baseline.rounds, baseline.control_messages, flows)]
+    engineering = scenario.traffic_engineering
+    phases = [_measure_phase(network, "baseline", baseline.rounds, baseline.control_messages, flows, engineering)]
     for event in scenario.events:
         _apply_event(network, event)
         convergence = network.converge()
         target = event.router if event.router is not None else "-".join(event.link)
-        phase = _measure_phase(network, event.type, convergence.rounds, convergence.control_messages, flows)
+        phase = _measure_phase(
+            network, event.type, convergence.rounds, convergence.control_messages, flows, engineering
+        )
         phase["target"] = target
         phases.append(phase)
-    return {
+    result: dict[str, object] = {
         "scenario": scenario.name,
         "topology": scenario.topology,
         "routers": scenario.routers,
-        "phases": phases,
     }
+    if scenario.rip is not None:
+        result["rip"] = describe_options(options, resolve_config(scenario.rip)["profile"])
+    result["phases"] = phases
+    return result
 
 
-def _measure_phase(network, event: str, rounds: int, messages: int, flows: list[TrafficFlow]) -> dict[str, object]:
+def _measure_phase(
+    network,
+    event: str,
+    rounds: int,
+    messages: int,
+    flows: list[TrafficFlow],
+    engineering: dict[str, object] | None = None,
+) -> dict[str, object]:
     """Collect routing telemetry and optional traffic metrics for one phase."""
+    engineered = None
+    if flows and engineering is not None:
+        engineered = engineer_traffic(
+            network,
+            flows,
+            max_epochs=int(engineering.get("max_epochs", 10)),
+            max_rounds=int(engineering.get("max_rounds", 200)),
+        )
     traffic = simulate_traffic(network, flows) if flows else None
     phase: dict[str, object] = {
         "event": event,
@@ -211,6 +232,8 @@ def _measure_phase(network, event: str, rounds: int, messages: int, flows: list[
         "control_messages": messages,
         "telemetry": collect_telemetry(network, traffic),
     }
+    if engineered is not None:
+        phase["traffic_engineering"] = engineered.summary()
     if traffic is not None:
         phase["traffic"] = {
             "offered_mbps": sum(flow.rate_mbps for flow in flows),

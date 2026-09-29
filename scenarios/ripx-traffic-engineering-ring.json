@@ -1,0 +1,16 @@
+{
+  "name": "ripx-traffic-engineering-ring",
+  "topology": "ring",
+  "routers": 6,
+  "rip": {"profile": "ripx"},
+  "traffic_engineering": {"max_epochs": 10},
+  "flows": [
+    {"source": "R1", "destination": "R3", "rate_mbps": 70},
+    {"source": "R2", "destination": "R3", "rate_mbps": 60},
+    {"source": "R1", "destination": "R4", "rate_mbps": 40}
+  ],
+  "events": [
+    {"type": "link_failure", "link": ["R4", "R5"]},
+    {"type": "link_recovery", "link": ["R4", "R5"]}
+  ]
+}
