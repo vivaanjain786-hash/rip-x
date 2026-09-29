@@ -135,8 +135,12 @@ def run_update_trial(
     routers: int = 20,
     edge_probability: float = 0.15,
     timeline: Timeline = Timeline(),
+    series: bool = False,
 ) -> dict[str, Any]:
-    """Run one configuration on one seeded topology and measure every round."""
+    """Run one configuration on one seeded topology and measure every round.
+
+    With ``series=True`` the result also carries per-round counters for charts.
+    """
     network = random_connected(routers, seed=seed, edge_probability=edge_probability, **network_options(config))
     failed_link, failed_router = choose_failures(network, seed)
     initial = network.converge(max_rounds=500)
@@ -153,6 +157,7 @@ def run_update_trial(
     stale_pair_rounds = 0
     blackholes_by_phase = {"stable": 0, **{name: 0 for _, name in timeline.events()}}
     phase = "stable"
+    per_round: list[dict[str, int]] = []
     for round_index in range(timeline.horizon):
         event = events.get(round_index)
         if event == "link_failure":
@@ -173,6 +178,16 @@ def run_update_trial(
         blackholes_by_phase[phase] += state["blackhole"]
         loop_pair_rounds += state["loop"]
         stale_pair_rounds += state["stale"]
+        if series:
+            per_round.append(
+                {
+                    "round": round_index,
+                    "messages": sum(messages_by_round),
+                    "incorrect": state["incorrect"],
+                    "blackhole": state["blackhole"],
+                    "loop": state["loop"],
+                }
+            )
 
     # Convergence after an event: rounds until the tables match Bellman-Ford
     # and stay matching until the next event (or the end of the run).
@@ -187,7 +202,7 @@ def run_update_trial(
             convergence[name] = last_wrong + 1
 
     stable_window = messages_by_round[: timeline.link_failure]
-    return {
+    result = {
         "seed": seed,
         "failed_link": "-".join(failed_link),
         "failed_router": failed_router,
@@ -203,6 +218,9 @@ def run_update_trial(
         "stale_pair_rounds": stale_pair_rounds,
         "route_changes": sum(router.route_change_count for router in network.routers.values()) - changes_at_start,
     }
+    if series:
+        result["series"] = per_round
+    return result
 
 
 _UPDATE_METRICS: dict[str, Callable[[dict[str, Any]], float | None]] = {
@@ -319,6 +337,7 @@ def run_traffic_trial(seed: int, *, routers: int = 12, edge_probability: float =
             "delivered_ratio": ripx_report.delivered_mbps / offered,
             "maximum_utilization": ripx_report.maximum_utilization,
             "mean_path_hops": mean_hops(ripx_report),
+            "epochs": engineered.epochs,
             "epochs_run": len(engineered.epochs) - 1,
             "selected_epoch": engineered.selected_epoch,
             "te_control_messages": engineered.control_messages,

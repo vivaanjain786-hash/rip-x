@@ -166,3 +166,36 @@ def test_unknown_endpoint_is_404_and_bad_json_is_400(api):
     with pytest.raises(urllib.error.HTTPError) as error:
         urllib.request.urlopen(request)
     assert error.value.code == 400
+
+
+def test_compare_runs_both_protocols_on_the_same_failures(api):
+    status, result = api("/api/compare", {"routers": 8, "seed": 1})
+    assert status == 200
+    rip, ripx = result["runs"]["rip"], result["runs"]["ripx"]
+    assert (rip["failed_link"], rip["failed_router"]) == (ripx["failed_link"], ripx["failed_router"])
+    assert len(rip["series"]) == len(ripx["series"]) == result["timeline"]["horizon"]
+    assert ripx["series"][-1]["messages"] < rip["series"][-1]["messages"]
+    assert list(result["events"].values()) == ["link_failure", "link_recovery", "router_failure", "router_recovery"]
+
+
+def test_compare_rejects_out_of_range_sizes(api):
+    assert api("/api/compare", {"routers": 500})[0] == 400
+
+
+def test_traffic_demo_returns_epochs(api):
+    status, trial = api("/api/demo/traffic", {"seed": 0})
+    assert status == 200
+    assert trial["ripx"]["epochs"][0]["epoch"] == 0
+    assert trial["ripx"]["delivered_ratio"] >= trial["rip"]["delivered_ratio"] - 1e-9
+
+
+def test_benchmark_latest_reads_the_committed_results(api):
+    status, latest = api("/api/benchmark/latest")
+    assert status == 200 and latest["seeds"] >= 2
+    assert "ripx" in latest["update_control"] and "ripx" in latest["traffic_engineering"]
+
+
+def test_benchmark_run_validates_seeds_and_reports_status(api):
+    assert api("/api/benchmark/run", {"seeds": 1})[0] == 400
+    status, body = api("/api/benchmark/status")
+    assert status == 200 and body["state"] in {"idle", "running", "done", "error"}

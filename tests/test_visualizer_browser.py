@@ -71,3 +71,14 @@ def test_switching_profile_reloads_the_network_with_ripx_settings(page):
     page.wait_for_timeout(300)
     assert "updates every" in page.inner_text("#inspectorStatus")
     assert page.errors == []
+
+
+def test_dashboard_renders_comparison_and_traffic_engineering(page):
+    page.goto(page.url.rsplit("/", 1)[0] + "/dashboard.html")
+    page.wait_for_selector("#cmpCards .card", timeout=60000)
+    assert page.locator("#cmpCharts svg").count() == 4
+    page.click("#teGo")
+    page.wait_for_selector("#teCards .card", timeout=60000)
+    assert "%" in page.inner_text("#teCards")
+    assert "Traffic engineering" in page.inner_text("#bm") or "seeds" in page.inner_text("#bmBody")
+    assert page.errors == []

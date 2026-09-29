@@ -152,6 +152,21 @@ def _plot(updates: dict[str, Any], traffic: dict[str, Any], destination: Path) -
     plt.close(figure)
 
 
+def run_and_save(
+    seeds: list[int], output: Path, *, routers: int = 20, plot: bool = True
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Run both experiments over ``seeds`` and write JSON, report and (optionally) the plot."""
+    updates = run_update_benchmark(seeds, routers=routers, timeline=Timeline())
+    traffic = run_traffic_benchmark(seeds)
+    output.mkdir(parents=True, exist_ok=True)
+    save_benchmark(updates, output / "update_control.json")
+    save_benchmark(traffic, output / "traffic_engineering.json")
+    (output / "report.md").write_text(render_report(updates, traffic), encoding="utf-8")
+    if plot:
+        _plot(updates, traffic, output / "benchmark.png")
+    return updates, traffic
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Benchmark standard RIP against RIP-X.")
     parser.add_argument("--seeds", type=int, default=30, help="number of seeded trials per experiment")
@@ -162,15 +177,8 @@ def main(argv: list[str] | None = None) -> None:
     arguments = parser.parse_args(argv)
     seeds = list(range(arguments.first_seed, arguments.first_seed + arguments.seeds))
 
-    updates = run_update_benchmark(seeds, routers=arguments.routers, timeline=Timeline())
-    traffic = run_traffic_benchmark(seeds)
-    arguments.output.mkdir(parents=True, exist_ok=True)
-    save_benchmark(updates, arguments.output / "update_control.json")
-    save_benchmark(traffic, arguments.output / "traffic_engineering.json")
+    updates, traffic = run_and_save(seeds, arguments.output, routers=arguments.routers, plot=not arguments.no_plot)
     report = render_report(updates, traffic)
-    (arguments.output / "report.md").write_text(report, encoding="utf-8")
-    if not arguments.no_plot:
-        _plot(updates, traffic, arguments.output / "benchmark.png")
     print(report)
 
 

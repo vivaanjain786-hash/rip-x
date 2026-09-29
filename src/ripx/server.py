@@ -18,6 +18,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from ripx.analytics.benchmark import UPDATE_CONFIGURATIONS, Timeline, run_traffic_trial, run_update_trial
 from ripx.analytics.validation import trace_next_hops
 from ripx.config import describe_options, network_options, resolve_config
 from ripx.routing.rip import INFINITY
@@ -26,7 +27,82 @@ from ripx.simulation.traffic import TrafficFlow, simulate_traffic
 from ripx.simulation.traffic_engineering import engineer_traffic
 
 VISUALIZER_DIR = Path(__file__).resolve().parents[2] / "visualizer"
+RESULTS_DIR = Path(__file__).resolve().parents[2] / "results" / "benchmark"
 MAX_ROUTERS = 200
+DEMO_TIMELINE = Timeline(link_failure=60, link_recovery=120, router_failure=180, router_recovery=240, horizon=300)
+
+
+class BenchmarkJob:
+    """A background benchmark run started from the dashboard (one at a time)."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.state = "idle"
+        self.seeds = 0
+        self.error = ""
+
+    def start(self, seeds: int) -> bool:
+        from ripx.benchmark import run_and_save
+
+        with self.lock:
+            if self.state == "running":
+                return False
+            self.state, self.seeds, self.error = "running", seeds, ""
+
+        def work() -> None:
+            try:
+                run_and_save(list(range(seeds)), RESULTS_DIR / "live", plot=False)
+                outcome = ("done", "")
+            except Exception as error:  # reported to the page, not raised in the thread
+                outcome = ("error", str(error))
+            with self.lock:
+                self.state, self.error = outcome
+
+        threading.Thread(target=work, daemon=True).start()
+        return True
+
+    def status(self) -> dict[str, Any]:
+        with self.lock:
+            return {"state": self.state, "seeds": self.seeds, "error": self.error}
+
+
+BENCHMARK_JOB = BenchmarkJob()
+
+
+def latest_benchmark() -> dict[str, Any]:
+    """Summary of the newest benchmark on disk (a dashboard run, else the committed one)."""
+    for folder, source in ((RESULTS_DIR / "live", "dashboard run"), (RESULTS_DIR, "committed run")):
+        try:
+            updates = json.loads((folder / "update_control.json").read_text(encoding="utf-8"))
+            traffic = json.loads((folder / "traffic_engineering.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        return {
+            "source": source,
+            "seeds": len(updates["seeds"]),
+            "update_control": updates["summary"],
+            "traffic_engineering": traffic["summary"],
+        }
+    return {"source": None}
+
+
+def compare(payload: dict[str, Any]) -> dict[str, Any]:
+    """Run standard RIP and RIP-X on the same topology and failures; return per-round series."""
+    routers, seed = int(payload.get("routers", 16)), int(payload.get("seed", 0))
+    if not 6 <= routers <= 40:
+        raise ApiError("routers must be between 6 and 40")
+    try:
+        runs = {
+            name: run_update_trial(UPDATE_CONFIGURATIONS[name], seed=seed, routers=routers, timeline=DEMO_TIMELINE, series=True)
+            for name in ("rip", "ripx")
+        }
+    except (ValueError, RuntimeError) as error:
+        raise ApiError(str(error)) from error
+    return {"timeline": DEMO_TIMELINE.__dict__, "events": dict(DEMO_TIMELINE.events()), "runs": runs}
+
+
+def traffic_demo(payload: dict[str, Any]) -> dict[str, Any]:
+    return run_traffic_trial(int(payload.get("seed", 0)), routers=12)
 
 
 class ApiError(ValueError):
@@ -283,6 +359,13 @@ class RipxRequestHandler(SimpleHTTPRequestHandler):
             raise ApiError("request body must be a JSON object")
         return payload
 
+    @staticmethod
+    def _start_benchmark(body: dict[str, Any]) -> dict[str, Any]:
+        seeds = int(body.get("seeds", 5))
+        if not 2 <= seeds <= 30:
+            raise ApiError("seeds must be between 2 and 30")
+        return {"started": BENCHMARK_JOB.start(seeds), **BENCHMARK_JOB.status()}
+
     def do_GET(self) -> None:  # noqa: N802 - http.server naming
         if self.path == "/api/health":
             self._send_json({"engine": "python", "name": "ripx"})
@@ -293,6 +376,12 @@ class RipxRequestHandler(SimpleHTTPRequestHandler):
                     self._send_json(self.session.snapshot())
                 except ApiError as error:
                     self._send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+            return
+        if self.path == "/api/benchmark/latest":
+            self._send_json(latest_benchmark())
+            return
+        if self.path == "/api/benchmark/status":
+            self._send_json(BENCHMARK_JOB.status())
             return
         if self.path.startswith("/api/"):
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
@@ -310,6 +399,17 @@ class RipxRequestHandler(SimpleHTTPRequestHandler):
             "/api/trace": lambda body: self.session.trace(str(body.get("source", "")), str(body.get("destination", ""))),
             "/api/traffic": lambda body: self.session.traffic(body),
         }
+        stateless = {
+            "/api/compare": compare,
+            "/api/demo/traffic": traffic_demo,
+            "/api/benchmark/run": self._start_benchmark,
+        }
+        if self.path in stateless:
+            try:
+                self._send_json(stateless[self.path](self._read_json()))
+            except (ApiError, TypeError, ValueError) as error:
+                self._send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+            return
         handler = routes.get(self.path)
         if handler is None:
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
