@@ -22,6 +22,26 @@ python -m pytest
 python -m ripx scenarios/baseline-ring-10.json --output results/baseline-ring-10.json
 ```
 
+## Live Interactive Visualizer (Packet Tracer Mode)
+
+Run the real-time, browser-based Packet Tracer style simulator:
+
+```bash
+python run_live_simulator.py
+```
+This automatically launches the interactive canvas at `http://localhost:8080`, allowing you to:
+- **Play / Step rounds**: Animate RIP advertisement packets flying along links.
+- **Fault Injection**: Click any router to simulate node failures or sever links to see dynamic re-convergence.
+- **Inspect Routing Tables**: Real-time distance-vector updates (metrics, next hops, reachability).
+- **Inject Traffic**: Send data flows (e.g. $R_1 \to R_3$) and watch dynamic packet forwarding.
+
+To generate the static 6-panel analytical dashboard image:
+```bash
+python examples/visualize.py --save results/dashboard.png
+```
+
+## Scenarios & Experiments
+
 Scenario files are JSON with a name, a baseline topology (`line`, `ring`, `star`, `mesh`, or `random`), and a router count. Random scenarios also accept a seed and edge probability. Reports capture only measured simulator values; RIP-X makes no performance claims from unrun experiments.
 
 Failure scenarios can also contain ordered `router_failure`, `router_recovery`, `link_failure`, and `link_recovery` events. Each event produces a separate measured re-convergence phase.
@@ -35,3 +55,4 @@ Traffic scenarios add `flows` with a source, destination, and offered `rate_mbps
 RIP remains the routing foundation. RIP-X is a research simulator for small, controlled networks; it does not replace OSPF, BGP, or public-Internet routing.
 
 For a short review presentation, run [the RIP failure-and-recovery demo](docs/review-demo.md).
+
