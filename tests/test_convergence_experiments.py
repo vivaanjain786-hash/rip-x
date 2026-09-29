@@ -20,40 +20,41 @@ from ripx.simulation.topologies import line, ring
 
 # ── Count-to-infinity ────────────────────────────────────────────────────────
 
-def test_count_to_infinity_comparison_returns_two_configurations():
+def test_count_to_infinity_comparison_returns_three_configurations():
     result = run_count_to_infinity_comparison()
     assert result["experiment"] == "count_to_infinity_comparison"
-    assert len(result["results"]) == 2
-    configs = {r["configuration"] for r in result["results"]}
-    assert configs == {"no_split_horizon", "poison_reverse"}
+    configs = [r["configuration"] for r in result["results"]]
+    assert configs == ["no_protection", "split_horizon", "poison_reverse"]
 
 
-def test_poison_reverse_invalidates_in_fewer_rounds():
-    """Poison reverse should cause R1 to learn about R3's loss faster than
-    counting to infinity without any loop-breaking mechanism.
-
-    Without poison reverse: R1 counts hop-by-hop up to 16 — many rounds.
-    With poison reverse: R2 immediately advertises INFINITY back, so R1
-    should invalidate R3 faster.
-    """
+def _by_config():
     result = run_count_to_infinity_comparison()
-    by_config = {r["configuration"]: r for r in result["results"]}
-    pr_rounds = by_config["poison_reverse"]["rounds_to_invalidate"]
-    no_pr_rounds = by_config["no_split_horizon"]["rounds_to_invalidate"]
-    assert pr_rounds <= no_pr_rounds, (
-        f"Expected poison_reverse ({pr_rounds}) to converge in <= rounds than "
-        f"no_split_horizon ({no_pr_rounds})"
-    )
+    return {r["configuration"]: r for r in result["results"]}
 
 
-def test_no_split_horizon_reaches_high_metric():
-    """Without loop prevention, the counting metric should climb well above 1
-    before reaching INFINITY=16 or the experiment terminates."""
-    result = run_count_to_infinity_comparison()
-    by_config = {r["configuration"]: r for r in result["results"]}
-    no_pr = by_config["no_split_horizon"]
-    # The metric should climb: peak must be > 2 (baseline) if counting occurs
-    assert no_pr["peak_metric"] > 2 or no_pr["rounds_to_invalidate"] >= 1
+def test_no_protection_counts_to_infinity():
+    """Without split horizon, R1 and R2 re-learn R3 from each other and the
+    metric climbs hop by hop until it reaches INFINITY=16."""
+    no_protection = _by_config()["no_protection"]
+    assert no_protection["peak_metric"] == 15
+    assert no_protection["rounds_to_invalidate"] > 10
+
+
+def test_split_horizon_and_poison_reverse_prevent_counting():
+    by_config = _by_config()
+    no_protection = by_config["no_protection"]
+    for configuration in ("split_horizon", "poison_reverse"):
+        protected = by_config[configuration]
+        assert protected["peak_metric"] == 0
+        assert protected["rounds_to_invalidate"] < no_protection["rounds_to_invalidate"]
+        assert protected["control_messages"] < no_protection["control_messages"]
+
+
+def test_count_to_infinity_counts_measured_control_messages():
+    """Only the R1-R2 link survives R3's failure, so each round carries exactly
+    one vector in each direction."""
+    for measured in _by_config().values():
+        assert measured["control_messages"] == 2 * measured["rounds_to_invalidate"]
 
 
 def test_count_to_infinity_result_is_json_serialisable():

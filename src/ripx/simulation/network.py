@@ -28,10 +28,26 @@ class ConvergenceResult:
 class RipNetwork:
     """Undirected router/link abstraction with atomic RIP update rounds."""
 
-    def __init__(self, *, route_timeout: int = 180, garbage_collection: int = 120, poison_reverse: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        route_timeout: int = 180,
+        garbage_collection: int = 120,
+        poison_reverse: bool = True,
+        split_horizon: bool = True,
+        update_interval: int = 1,
+        triggered_updates: bool = True,
+    ) -> None:
+        if update_interval < 1:
+            raise ValueError("update_interval must be at least 1")
+        if update_interval >= route_timeout:
+            raise ValueError("update_interval must be shorter than route_timeout")
         self.route_timeout = route_timeout
         self.garbage_collection = garbage_collection
         self.poison_reverse = poison_reverse
+        self.split_horizon = split_horizon
+        self.update_interval = update_interval
+        self.triggered_updates = triggered_updates
         self.routers: dict[str, RipRouter] = {}
         self.links: dict[frozenset[str], Link] = {}
         self.link_baselines: dict[frozenset[str], Link] = {}
@@ -46,6 +62,7 @@ class RipNetwork:
             route_timeout=self.route_timeout,
             garbage_collection=self.garbage_collection,
             poison_reverse=self.poison_reverse,
+            split_horizon=self.split_horizon,
         )
 
     def add_link(self, left: str, right: str, **telemetry: float) -> None:
@@ -170,16 +187,44 @@ class RipNetwork:
                 return None
         return path
 
+    def is_periodic_round(self) -> bool:
+        """Whether the round about to run is a scheduled periodic update."""
+        return self.now % self.update_interval == 0
+
+    def should_advertise(self, router: str) -> bool:
+        """Decide whether ``router`` sends its vector in the upcoming round.
+
+        Every router sends on periodic rounds. Between them, a router sends
+        only when a routing change or topology event marked it as triggered.
+        With the default ``update_interval=1`` every round is periodic.
+        """
+        if self.is_periodic_round():
+            return True
+        return self.triggered_updates and self.routers[router].triggered
+
+    def has_pending_updates(self) -> bool:
+        """Whether any active router holds changes it has not advertised yet."""
+        return any(
+            router.triggered
+            for name, router in self.routers.items()
+            if name not in self.failed_routers
+        )
+
     def step(self) -> ConvergenceResult:
-        """Deliver a snapshot of every active router's vector to each neighbor."""
+        """Deliver a snapshot of each advertising router's vector to its neighbors."""
+        senders = [
+            name
+            for name in sorted(self.routers)
+            if name not in self.failed_routers and self.should_advertise(name)
+        ]
         outgoing = [
             (source, neighbor, self.routers[source].update_for(neighbor))
-            for source in sorted(self.routers)
+            for source in senders
             for neighbor in self.neighbors(source)
         ]
-        for name, router in self.routers.items():
-            if name not in self.failed_routers:
-                router.triggered = False
+        # Only routers that advertised have delivered their pending changes.
+        for name in senders:
+            self.routers[name].triggered = False
         self.now += 1
         changed = False
         for source, target, vector in outgoing:
@@ -194,6 +239,6 @@ class RipNetwork:
         for round_number in range(1, max_rounds + 1):
             result = self.step()
             messages += result.control_messages
-            if not result.changed:
+            if not result.changed and not self.has_pending_updates():
                 return ConvergenceResult(round_number, messages, False)
         return ConvergenceResult(max_rounds, messages, True)

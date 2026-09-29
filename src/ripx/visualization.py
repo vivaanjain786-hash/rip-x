@@ -325,7 +325,7 @@ def draw_count_to_infinity(
     x = range(len(results))
     width = 0.35
     b1 = ax.bar([xi - width / 2 for xi in x], rounds, width,
-                color=_PALETTE["node"], label="Rounds to invalidate R3")
+                color=_PALETTE["node"], label="Rounds until R3 unreachable")
     b2 = ax.bar([xi + width / 2 for xi in x], peaks, width,
                 color=_PALETTE["accent"], label="Peak metric reached")
 
@@ -340,7 +340,7 @@ def draw_count_to_infinity(
     ax.set_xticks(list(x))
     ax.set_xticklabels(configs, color=_PALETTE["text"])
     ax.set_ylabel("Rounds / Metric value", color=_PALETTE["text"])
-    ax.set_title("Count-to-Infinity: Standard RIP vs Poison Reverse\n(3-router line, R3 goes silent)",
+    ax.set_title("Count-to-Infinity: Loop Protection Compared\n(3-router line, R3 fails)",
                  color=_PALETTE["text"], fontsize=12)
     ax.yaxis.grid(True, color=_PALETTE["grid"], linestyle="--", alpha=0.5)
     ax.legend(facecolor=_PALETTE["panel"], edgecolor=_PALETTE["grid"],

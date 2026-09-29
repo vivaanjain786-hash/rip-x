@@ -36,11 +36,13 @@ class RipRouter:
         route_timeout: int = 180,
         garbage_collection: int = 120,
         poison_reverse: bool = True,
+        split_horizon: bool = True,
     ) -> None:
         self.name = name
         self.route_timeout = route_timeout
         self.garbage_collection = garbage_collection
         self.poison_reverse = poison_reverse
+        self.split_horizon = split_horizon
         self.routes: dict[str, Route] = {name: Route(name, 0, None, None, 0)}
         self.last_heard: dict[tuple[str, str], int] = {}
         self.triggered = True
@@ -50,11 +52,17 @@ class RipRouter:
         return self.routes.get(destination)
 
     def update_for(self, neighbor: str) -> dict[str, int]:
-        """Build an advertisement, applying split horizon with poison reverse."""
+        """Build an advertisement, applying split horizon with poison reverse.
+
+        With ``split_horizon=False`` every route is advertised unchanged to
+        every neighbor, which is the unprotected distance-vector behavior that
+        allows count-to-infinity. ``poison_reverse`` only has an effect while
+        split horizon is enabled.
+        """
         advertisement: dict[str, int] = {}
         for destination, route in self.routes.items():
             metric = route.metric
-            if destination != neighbor and route.learned_from == neighbor:
+            if self.split_horizon and destination != neighbor and route.learned_from == neighbor:
                 if not self.poison_reverse:
                     continue
                 metric = INFINITY
