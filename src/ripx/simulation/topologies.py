@@ -3,56 +3,58 @@
 from __future__ import annotations
 
 from random import Random
+from typing import Any
 
 from ripx.simulation.network import RipNetwork
 
 
-def _network(names: list[str]) -> RipNetwork:
-    network = RipNetwork()
+def _network(names: list[str], options: dict[str, Any]) -> RipNetwork:
+    """Create routers on a network built with ``RipNetwork(**options)``."""
+    network = RipNetwork(**options)
     for name in names:
         network.add_router(name)
     return network
 
 
-def line(size: int) -> RipNetwork:
+def line(size: int, **options: Any) -> RipNetwork:
     if size < 2:
         raise ValueError("a line topology needs at least two routers")
     names = [f"R{index}" for index in range(1, size + 1)]
-    network = _network(names)
+    network = _network(names, options)
     for left, right in zip(names, names[1:]):
         network.add_link(left, right)
     return network
 
 
-def ring(size: int) -> RipNetwork:
-    network = line(size)
+def ring(size: int, **options: Any) -> RipNetwork:
+    network = line(size, **options)
     network.add_link(f"R{size}", "R1")
     return network
 
 
-def star(size: int) -> RipNetwork:
+def star(size: int, **options: Any) -> RipNetwork:
     if size < 2:
         raise ValueError("a star topology needs at least two routers")
     names = [f"R{index}" for index in range(1, size + 1)]
-    network = _network(names)
+    network = _network(names, options)
     for name in names[1:]:
         network.add_link("R1", name)
     return network
 
 
-def mesh(size: int) -> RipNetwork:
+def mesh(size: int, **options: Any) -> RipNetwork:
     """Create a complete mesh with deterministic router names."""
     if size < 2:
         raise ValueError("a mesh topology needs at least two routers")
     names = [f"R{index}" for index in range(1, size + 1)]
-    network = _network(names)
+    network = _network(names, options)
     for position, left in enumerate(names):
         for right in names[position + 1 :]:
             network.add_link(left, right)
     return network
 
 
-def random_connected(size: int, *, seed: int = 0, edge_probability: float = 0.25) -> RipNetwork:
+def random_connected(size: int, *, seed: int = 0, edge_probability: float = 0.25, **options: Any) -> RipNetwork:
     """Create a seeded connected random graph for repeatable experiments."""
     if size < 2:
         raise ValueError("a random topology needs at least two routers")
@@ -60,7 +62,7 @@ def random_connected(size: int, *, seed: int = 0, edge_probability: float = 0.25
         raise ValueError("edge_probability must be between 0 and 1")
     names = [f"R{index}" for index in range(1, size + 1)]
     generator = Random(seed)
-    network = _network(names)
+    network = _network(names, options)
     edges: set[tuple[str, str]] = set()
     for index in range(1, size):
         parent = names[generator.randrange(index)]
@@ -75,7 +77,7 @@ def random_connected(size: int, *, seed: int = 0, edge_probability: float = 0.25
     return network
 
 
-def scale_free(size: int, *, seed: int = 0, initial_clique: int = 3) -> RipNetwork:
+def scale_free(size: int, *, seed: int = 0, initial_clique: int = 3, **options: Any) -> RipNetwork:
     """Barabási–Albert preferential-attachment topology for power-law degree distribution.
 
     Each new router connects to ``min(initial_clique, existing)`` existing routers
@@ -89,7 +91,7 @@ def scale_free(size: int, *, seed: int = 0, initial_clique: int = 3) -> RipNetwo
         raise ValueError("initial_clique must be at least 1")
     names = [f"R{index}" for index in range(1, size + 1)]
     generator = Random(seed)
-    network = _network(names)
+    network = _network(names, options)
     # Start with a small connected clique
     m = min(initial_clique, size)
     for i in range(m - 1):
@@ -109,7 +111,6 @@ def scale_free(size: int, *, seed: int = 0, initial_clique: int = 3) -> RipNetwo
         new_node = names[index]
         targets_count = min(initial_clique, index)
         existing = names[:index]
-        total_degree = sum(degree[n] for n in existing) or 1
         selected: list[str] = []
         remaining = list(existing)
         for _ in range(targets_count):
@@ -135,7 +136,7 @@ def scale_free(size: int, *, seed: int = 0, initial_clique: int = 3) -> RipNetwo
     return network
 
 
-def enterprise_like(*, seed: int = 0) -> RipNetwork:
+def enterprise_like(*, seed: int = 0, **options: Any) -> RipNetwork:
     """Three-tier enterprise topology: 2 core, 3 distribution, 5 access routers.
 
     Mirrors a typical campus/branch-office network:
@@ -149,7 +150,7 @@ def enterprise_like(*, seed: int = 0) -> RipNetwork:
     dist = ["D1", "D2", "D3"]
     access = ["A1", "A2", "A3", "A4", "A5"]
     names = core + dist + access
-    network = _network(names)
+    network = _network(names, options)
     # Core full mesh
     for i, left in enumerate(core):
         for right in core[i + 1:]:
@@ -164,7 +165,7 @@ def enterprise_like(*, seed: int = 0) -> RipNetwork:
     return network
 
 
-def iot_edge_like(*, edge_hubs: int = 3, devices_per_hub: int = 4, seed: int = 0) -> RipNetwork:
+def iot_edge_like(*, edge_hubs: int = 3, devices_per_hub: int = 4, seed: int = 0, **options: Any) -> RipNetwork:
     """Star-of-stars topology for IoT/edge network experiments.
 
     One gateway router connects to ``edge_hubs`` hub routers, each of which
@@ -183,7 +184,7 @@ def iot_edge_like(*, edge_hubs: int = 3, devices_per_hub: int = 4, seed: int = 0
         for dev_index in range(devices_per_hub):
             leaves.append(f"D{hub_index + 1}_{dev_index + 1}")
     names += leaves
-    network = _network(names)
+    network = _network(names, options)
     for hub in hubs:
         network.add_link("GW", hub)
     for hub_index, hub in enumerate(hubs):
