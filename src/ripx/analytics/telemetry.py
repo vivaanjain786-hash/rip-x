@@ -37,6 +37,7 @@ def collect_telemetry(network: RipNetwork, traffic: TrafficReport | None = None)
                 "latency_ms": link.latency_ms,
                 "configured_packet_loss": link.packet_loss,
                 "utilization": utilization.get(label),
+                "cost": network.link_costs[frozenset((link.left, link.right))],
             }
         )
     return {

@@ -1,39 +1,18 @@
-"""Launcher for RIP-X Live Interactive Simulator (Packet Tracer Simulation Mode)."""
+"""Launcher for the RIP-X live visualizer, driven by the Python RIP engine.
+
+Equivalent to ``python -m ripx.server --open``. Opening ``visualizer/index.html``
+directly still works, but then the browser falls back to its standalone engine.
+"""
 
 from __future__ import annotations
 
-import functools
-import http.server
-import os
+import sys
 from pathlib import Path
-import socketserver
-import threading
-import webbrowser
 
-PORT = 8080
-VISUALIZER_DIR = Path(__file__).parent / "visualizer"
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-
-def main() -> None:
-    os.chdir(VISUALIZER_DIR)
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(VISUALIZER_DIR))
-
-    with socketserver.TCPServer(("", PORT), handler) as httpd:
-        url = f"http://localhost:{PORT}"
-        print(f"============================================================")
-        print(f"  RIP-X Live Interactive Simulator (Packet Tracer Mode)")
-        print(f"  Running at: {url}")
-        print(f"  Press Ctrl+C in terminal to stop server.")
-        print(f"============================================================")
-
-        # Open in default web browser automatically
-        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
-
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\nShutting down simulator server.")
+from ripx.server import main  # noqa: E402
 
 
 if __name__ == "__main__":
-    main()
+    main(["--open", *sys.argv[1:]])

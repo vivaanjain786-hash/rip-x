@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+from ripx.config import resolve_config
 
 
 @dataclass(frozen=True)
@@ -24,6 +27,22 @@ class FlowSpec:
 
 
 @dataclass(frozen=True)
+class LinkSpec:
+    link: tuple[str, str]
+    bandwidth_mbps: float | None = None
+    latency_ms: float | None = None
+    packet_loss: float | None = None
+
+    def properties(self) -> dict[str, float]:
+        values = {
+            "bandwidth_mbps": self.bandwidth_mbps,
+            "latency_ms": self.latency_ms,
+            "packet_loss": self.packet_loss,
+        }
+        return {key: value for key, value in values.items() if value is not None}
+
+
+@dataclass(frozen=True)
 class Scenario:
     name: str
     topology: str
@@ -37,6 +56,11 @@ class Scenario:
     devices_per_hub: int = 4
     events: tuple[FaultEvent, ...] = ()
     flows: tuple[FlowSpec, ...] = ()
+    links: tuple[LinkSpec, ...] = ()
+    # RIP / RIP-X settings (see ripx.config); None keeps the baseline defaults.
+    rip: dict[str, Any] | None = None
+    # Run the RIP-X traffic-engineering loop after each phase's convergence.
+    traffic_engineering: dict[str, Any] | None = None
 
 
 _VALID_TOPOLOGIES = {"line", "ring", "star", "mesh", "random", "scale_free", "enterprise", "iot_edge"}
@@ -133,6 +157,41 @@ def load_scenario(path: str | Path) -> Scenario:
         if not isinstance(rate, (int, float)) or rate < 0:
             raise ValueError(f"flow {index} requires a non-negative rate_mbps")
         flows.append(FlowSpec(source, destination, float(rate)))
+    links: list[LinkSpec] = []
+    links_data = data.get("links", [])
+    if not isinstance(links_data, list):
+        raise ValueError("links must be a list")
+    for index, entry in enumerate(links_data):
+        if not isinstance(entry, dict):
+            raise ValueError(f"link {index} must be an object")
+        link = entry.get("link")
+        if not isinstance(link, list) or len(link) != 2 or not all(isinstance(node, str) for node in link):
+            raise ValueError(f"link {index} requires a two-router link")
+        bandwidth = entry.get("bandwidth_mbps")
+        latency = entry.get("latency_ms")
+        loss = entry.get("packet_loss")
+        if bandwidth is not None and (not isinstance(bandwidth, (int, float)) or bandwidth <= 0):
+            raise ValueError(f"link {index} bandwidth_mbps must be positive")
+        if latency is not None and (not isinstance(latency, (int, float)) or latency < 0):
+            raise ValueError(f"link {index} latency_ms must not be negative")
+        if loss is not None and (not isinstance(loss, (int, float)) or not 0 <= loss <= 1):
+            raise ValueError(f"link {index} packet_loss must be between 0 and 1")
+        links.append(
+            LinkSpec(
+                (link[0], link[1]),
+                None if bandwidth is None else float(bandwidth),
+                None if latency is None else float(latency),
+                None if loss is None else float(loss),
+            )
+        )
+    rip = data.get("rip")
+    if rip is not None:
+        if not isinstance(rip, dict):
+            raise ValueError("rip must be an object")
+        resolve_config(rip)
+    traffic_engineering = data.get("traffic_engineering")
+    if traffic_engineering is not None and not isinstance(traffic_engineering, dict):
+        raise ValueError("traffic_engineering must be an object")
     return Scenario(
         name=data["name"],
         topology=data["topology"],
@@ -144,4 +203,7 @@ def load_scenario(path: str | Path) -> Scenario:
         devices_per_hub=devices_per_hub,
         events=tuple(events),
         flows=tuple(flows),
+        links=tuple(links),
+        rip=rip,
+        traffic_engineering=traffic_engineering,
     )

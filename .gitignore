@@ -219,3 +219,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Benchmark runs started from the dashboard
+results/benchmark/live/

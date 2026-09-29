@@ -21,7 +21,11 @@
     speedMultiplier: 1.0,
     isConverged: false,
     poisonReverse: true,
+    splitHorizon: true,
     triggeredUpdates: true,
+    engine: 'js',     // 'python' when served by `python -m ripx.server`
+    profile: 'baseline',
+    busy: false,
     packets: [],      // [ { from, to, type: 'rip'|'data', progress: 0..1, label, path: [], pathIdx: 0 } ]
     log: [],
     draggingNode: null,
@@ -40,6 +44,9 @@
   const btnReset = document.getElementById('btnReset');
   const topologySelect = document.getElementById('topologySelect');
   const togglePoisonReverse = document.getElementById('togglePoisonReverse');
+  const toggleSplitHorizon = document.getElementById('toggleSplitHorizon');
+  const profileSelect = document.getElementById('profileSelect');
+  const engineVal = document.getElementById('engineVal');
   const toggleTriggeredUpdates = document.getElementById('toggleTriggeredUpdates');
   const btnSendTraffic = document.getElementById('btnSendTraffic');
   const convergenceChip = document.getElementById('convergenceChip');
@@ -153,6 +160,7 @@
     initRoutingTables();
     addLog('info', 'SYS', `Loaded topology: ${preset.toUpperCase()} (${Object.keys(state.routers).length} Routers, ${state.links.length} Links)`);
     updateUI();
+    if (state.engine === 'python') loadNetworkIntoEngine();
   }
 
   function createRouter(id, x, y) {
@@ -192,7 +200,152 @@
     return state.links.find(l => (l.u === u && l.v === v) || (l.u === v && l.v === u));
   }
 
-  // --- RIP Routing Protocol Engine ---
+
+  // --- Python Engine Adapter ---
+  // When the page is served by `python -m ripx.server`, every routing decision
+  // comes from the Python RipNetwork. The in-browser engine below is only a
+  // fallback for opening index.html without the server.
+  async function api(path, body) {
+    const response = await fetch(path, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    return payload;
+  }
+
+  async function detectEngine() {
+    try {
+      const health = await api('/api/health');
+      state.engine = health.engine === 'python' ? 'python' : 'js';
+    } catch (err) {
+      state.engine = 'js';
+    }
+    engineVal.textContent = state.engine === 'python' ? 'Python' : 'Browser';
+    profileSelect.disabled = state.engine !== 'python';
+    toggleSplitHorizon.disabled = state.engine !== 'python';
+    addLog('info', 'ENGINE', state.engine === 'python'
+      ? 'Connected to the Python RIP-X engine. Routing is computed by ripx.RipNetwork.'
+      : 'Python engine not found; using the standalone in-browser engine.');
+  }
+
+  function engineConfig() {
+    return {
+      profile: state.profile,
+      split_horizon: state.splitHorizon,
+      poison_reverse: state.poisonReverse,
+      triggered_updates: state.triggeredUpdates
+    };
+  }
+
+  function applyServerState(snapshot) {
+    state.currentRound = snapshot.round;
+    state.controlMessages = snapshot.controlMessages;
+    state.isConverged = snapshot.converged;
+    Object.entries(snapshot.routers).forEach(([id, info]) => {
+      const router = state.routers[id];
+      if (!router) return;
+      router.up = info.up;
+      router.updateInterval = info.updateInterval;
+      router.routingTable = info.routes;
+    });
+    snapshot.links.forEach(serverLink => {
+      const link = getLink(serverLink.u, serverLink.v);
+      if (!link) return;
+      link.up = serverLink.up;
+      link.cost = serverLink.cost;
+      link.utilization = serverLink.utilization;
+      link.bandwidth = serverLink.bandwidth_mbps;
+      link.latency = serverLink.latency_ms;
+      link.loss = serverLink.packet_loss;
+    });
+    updateUI();
+  }
+
+  async function engineCall(path, body) {
+    try {
+      return await api(path, body);
+    } catch (err) {
+      addLog('fail', 'ENGINE', `Python engine error: ${err.message}`);
+      pauseSimulation();
+      return null;
+    }
+  }
+
+  async function loadNetworkIntoEngine() {
+    const result = await engineCall('/api/network', {
+      routers: Object.keys(state.routers),
+      links: state.links.map(l => [l.u, l.v]),
+      config: engineConfig()
+    });
+    if (result) {
+      applyServerState(result);
+      const cfg = result.config;
+      addLog('info', 'ENGINE', `Profile ${cfg.profile}: updates ${cfg.updates.type}, metric ${cfg.metric.type}, split horizon ${cfg.split_horizon !== false ? 'on' : 'off'}.`);
+    }
+  }
+
+  async function stepRipRoundPython() {
+    if (state.busy) return;
+    state.busy = true;
+    const result = await engineCall('/api/step', { rounds: 1 });
+    state.busy = false;
+    if (!result) return;
+    result.advertisements.forEach(([from, to]) => spawnPacket(from, to, 'rip', `RIP Adv [${from}→${to}]`));
+    result.requests.forEach(([from, to]) => spawnPacket(from, to, 'rip', `RIP Request [${from}→${to}]`));
+    applyServerState(result.state);
+    const sent = result.advertisements.length + result.requests.length;
+    if (state.isConverged) {
+      addLog('converged', 'CONVERGE', `Network CONVERGED at Round ${state.currentRound} (${state.controlMessages} total messages).`);
+      if (state.isPlaying) pauseSimulation();
+    } else {
+      const requestNote = result.requests.length ? `, ${result.requests.length} route requests` : '';
+      addLog('info', 'ROUND', `Round ${state.currentRound}: ${result.advertisements.length} RIP advertisements${requestNote}${result.changed ? '. Routing tables updated.' : '.'}`);
+    }
+    return sent;
+  }
+
+  async function toggleRouterPython(routerId) {
+    const result = await engineCall('/api/router/toggle', { router: routerId });
+    if (!result) return;
+    applyServerState(result.state);
+    const failed = result.action === 'failed';
+    addLog(failed ? 'fail' : 'recover', failed ? 'FAIL' : 'RECOVER', `Router ${routerId} ${failed ? 'FAILED' : 'RECOVERED'} (Python engine).`);
+    showOverlayNotice(`Router ${routerId} ${failed ? 'FAILED' : 'RECOVERED'}`);
+    if (state.triggeredUpdates) await stepRipRoundPython();
+  }
+
+  async function toggleLinkPython(link) {
+    const result = await engineCall('/api/link/toggle', { u: link.u, v: link.v });
+    if (!result) return;
+    applyServerState(result.state);
+    const failed = result.action === 'failed';
+    addLog(failed ? 'fail' : 'recover', 'LINK', `Link ${link.u} <-> ${link.v} ${failed ? 'SEVERED' : 'RESTORED'}`);
+    showOverlayNotice(`Link ${link.u} - ${link.v} ${failed ? 'SEVERED' : 'RESTORED'}`);
+    if (state.triggeredUpdates) await stepRipRoundPython();
+  }
+
+  async function sendDataTrafficPython(sourceId, destId) {
+    const result = await engineCall('/api/trace', { source: sourceId, destination: destId });
+    if (!result) return;
+    const path = result.path;
+    if (result.outcome === 'blackhole') {
+      addLog('fail', 'TRAFFIC', `Traffic ${sourceId}→${destId} DROPPED at ${path[path.length - 1]} (no usable route)`);
+      showOverlayNotice(`Traffic Dropped: No route to ${destId}`);
+    } else if (result.outcome === 'loop') {
+      addLog('fail', 'LOOP', `ROUTING LOOP DETECTED on path: ${path.join(' -> ')}`);
+      showOverlayNotice('Routing Loop Detected!');
+    } else {
+      addLog('traffic', 'TRAFFIC', `Data Flow: ${sourceId} → ${destId} routed via [${path.join(' -> ')}] (${path.length - 1} hops)`);
+    }
+    for (let i = 0; i < path.length - 1; i++) {
+      setTimeout(() => spawnPacket(path[i], path[i + 1], 'data', `Data [${sourceId}→${destId}]`), i * 350);
+    }
+  }
+
+  // --- RIP Routing Protocol Engine (standalone fallback) ---
   function initRoutingTables() {
     Object.values(state.routers).forEach(r => {
       r.routingTable = {};
@@ -202,6 +355,7 @@
   }
 
   function stepRipRound() {
+    if (state.engine === 'python') return stepRipRoundPython();
     state.currentRound++;
     let anyRouteChanged = false;
     let roundMsgs = 0;
@@ -300,6 +454,7 @@
   }
 
   function handleRouterFailure(routerId) {
+    if (state.engine === 'python') return toggleRouterPython(routerId);
     const router = state.routers[routerId];
     if (!router) return;
 
@@ -336,6 +491,7 @@
   }
 
   function handleLinkToggle(link) {
+    if (state.engine === 'python') return toggleLinkPython(link);
     link.up = !link.up;
     const stateStr = link.up ? 'RESTORED' : 'SEVERED';
     addLog(link.up ? 'recover' : 'fail', 'LINK', `Link ${link.u} <-> ${link.v} ${stateStr}`);
@@ -363,6 +519,7 @@
   }
 
   function sendDataTraffic(sourceId, destId) {
+    if (state.engine === 'python') return sendDataTrafficPython(sourceId, destId);
     const src = state.routers[sourceId];
     const dst = state.routers[destId];
     if (!src || !dst || !src.up || !dst.up) {
@@ -470,6 +627,14 @@
         ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
         ctx.lineWidth = 8;
         ctx.stroke();
+
+        // RIP-X link cost (only shown when it differs from one hop)
+        if (link.cost && link.cost > 1) {
+          ctx.fillStyle = '#fbbf24';
+          ctx.font = 'bold 11px JetBrains Mono';
+          ctx.textAlign = 'center';
+          ctx.fillText(`cost ${link.cost}`, (u.x + v.x) / 2, (u.y + v.y) / 2 - 8);
+        }
       } else {
         ctx.strokeStyle = 'rgba(244, 63, 94, 0.6)';
         ctx.lineWidth = 2.5;
@@ -678,7 +843,8 @@
     const router = state.routers[state.selectedRouterId];
     if (router) {
       selectedRouterName.textContent = `Router ${router.id} Details`;
-      inspectorStatus.textContent = router.up ? 'UP / ACTIVE' : 'FAILED / DOWN';
+      const intervalNote = router.up && router.updateInterval ? ` · updates every ${router.updateInterval} rounds` : '';
+      inspectorStatus.textContent = (router.up ? 'UP / ACTIVE' : 'FAILED / DOWN') + intervalNote;
       inspectorStatus.className = `meta-val ${router.up ? 'status-up' : 'status-down'}`;
       btnToggleNodeState.textContent = router.up ? 'Fail Router' : 'Recover Router';
       btnToggleNodeState.className = `btn btn-sm ${router.up ? 'btn-danger' : 'btn-accent'}`;
@@ -787,14 +953,37 @@
       loadTopologyPreset(e.target.value);
     });
 
+    // In Python-engine mode a protocol change rebuilds the network, since
+    // routers are created with their protocol settings.
+    function protocolChanged() {
+      if (state.engine === 'python') {
+        pauseSimulation();
+        loadTopologyPreset(topologySelect.value);
+      }
+    }
+
     togglePoisonReverse.addEventListener('change', (e) => {
       state.poisonReverse = e.target.checked;
       addLog('info', 'CONFIG', `Split Horizon with Poison Reverse: ${state.poisonReverse ? 'ENABLED' : 'DISABLED'}`);
+      protocolChanged();
+    });
+
+    toggleSplitHorizon.addEventListener('change', (e) => {
+      state.splitHorizon = e.target.checked;
+      addLog('info', 'CONFIG', `Split Horizon: ${state.splitHorizon ? 'ENABLED' : 'DISABLED (count-to-infinity possible)'}`);
+      protocolChanged();
+    });
+
+    profileSelect.addEventListener('change', (e) => {
+      state.profile = e.target.value;
+      addLog('info', 'CONFIG', `Protocol profile: ${state.profile}`);
+      protocolChanged();
     });
 
     toggleTriggeredUpdates.addEventListener('change', (e) => {
       state.triggeredUpdates = e.target.checked;
       addLog('info', 'CONFIG', `Triggered Updates on Link Failure: ${state.triggeredUpdates ? 'ENABLED' : 'DISABLED'}`);
+      protocolChanged();
     });
 
     btnSendTraffic.addEventListener('click', () => {
@@ -904,9 +1093,10 @@
   }
 
   // --- App Initialization ---
-  function init() {
+  async function init() {
     resizeCanvas();
     setupEventListeners();
+    await detectEngine();
     loadTopologyPreset('ring5');
     requestAnimationFrame(animate);
   }
