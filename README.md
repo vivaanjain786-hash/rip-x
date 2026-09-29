@@ -35,6 +35,7 @@ Select them with `RipNetwork(schedule=..., cost_policy=..., request_on_loss=True
 ### Benchmark
 
 ```bash
+python -m pip install -e .        # once; the package lives in src/
 python -m ripx.benchmark --seeds 30 --output results/benchmark
 ```
 
@@ -45,8 +46,12 @@ Runs the seeded RIP-vs-RIP-X comparison and writes `report.md`, JSON with every 
 Run the real-time, browser-based Packet Tracer style simulator, driven by the Python RIP engine:
 
 ```bash
-python -m ripx.server --open      # or: python run_live_simulator.py
+python run_live_simulator.py      # works straight from a fresh clone, nothing to install
+# or, after `python -m pip install -e .`:
+python -m ripx.server --open
 ```
+
+The package lives in `src/ripx`, so `python -m ripx...` commands (including `python -m ripx.server` and `python -m ripx.benchmark`) need the one-time `python -m pip install -e .` first; without it Python reports `No module named 'ripx'`. `run_live_simulator.py` adds `src/` to the path itself. In a GitHub Codespace, use `python run_live_simulator.py --port 8080` and open the forwarded port from the Ports tab (the browser cannot be opened automatically there).
 
 The page shows `Engine: Python` when it is connected. Opening `visualizer/index.html` directly (without the server) falls back to a standalone in-browser engine that supports only baseline RIP. The Protocol Profile menu (baseline, standard RIP, RIP-X) and the Split Horizon toggle need the Python engine.
 
