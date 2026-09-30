@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RIP-X Live Interactive Simulator | Packet Tracer Mode</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Header Navigation -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-badge">RIP-X</div>
+        <div class="brand-title">
+          <h1>Live Distance-Vector Routing Simulator</h1>
+          <span class="subtitle">Packet Tracer Interactive Simulation & Telemetry Mode</span>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div class="status-chip" id="convergenceChip">
+          <span class="indicator indicator-idle"></span>
+          <span id="convergenceStatusText">Ready</span>
+        </div>
+        <div class="metric-chip">
+          <span class="metric-label">Round</span>
+          <span class="metric-value" id="currentRoundVal">0</span>
+        </div>
+        <div class="metric-chip">
+          <span class="metric-label">Control Msgs</span>
+          <span class="metric-value" id="totalMsgsVal">0</span>
+        </div>
+        <div class="metric-chip">
+          <span class="metric-label">Active Routes</span>
+          <span class="metric-value" id="activeRoutesVal">0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Toolbar -->
+    <div class="control-toolbar">
+      <div class="control-group">
+        <span class="group-label">Simulation Control</span>
+        <div class="btn-group">
+          <button id="btnPlayPause" class="btn btn-primary" title="Play or Pause continuous simulation">
+            <svg id="playIcon" class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            <span id="playText">Play</span>
+          </button>
+          <button id="btnStep" class="btn btn-secondary" title="Execute single RIP advertisement round">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            <span>Step Round</span>
+          </button>
+          <button id="btnReset" class="btn btn-outline" title="Reset simulation state to baseline">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+            <span>Reset</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <span class="group-label">Animation Speed</span>
+        <div class="speed-selector">
+          <button class="speed-btn" data-speed="0.5">0.5x</button>
+          <button class="speed-btn active" data-speed="1">1x</button>
+          <button class="speed-btn" data-speed="2">2x</button>
+          <button class="speed-btn" data-speed="4">4x</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <span class="group-label">Topology Preset</span>
+        <select id="topologySelect" class="form-select">
+          <option value="ring5" selected>5-Router Ring (Review Demo)</option>
+          <option value="ring8">8-Router Ring</option>
+          <option value="star6">6-Router Star</option>
+          <option value="mesh5">5-Router Full Mesh</option>
+          <option value="scalefree">Scale-Free Graph (10 Routers)</option>
+          <option value="cti">Count-to-Infinity Line (A-B-C)</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <span class="group-label">Protocol Settings</span>
+        <div class="toggle-wrapper">
+          <label class="toggle-switch">
+            <input type="checkbox" id="togglePoisonReverse" checked>
+            <span class="slider"></span>
+          </label>
+          <span class="toggle-label" title="Split Horizon with Poison Reverse (Metric 16)">Poison Reverse</span>
+        </div>
+        <div class="toggle-wrapper">
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggleTriggeredUpdates" checked>
+            <span class="slider"></span>
+          </label>
+          <span class="toggle-label" title="Send triggered updates immediately on link failure">Triggered Updates</span>
+        </div>
+      </div>
+
+      <div class="control-group ml-auto">
+        <span class="group-label">Data Traffic Injection</span>
+        <button id="btnSendTraffic" class="btn btn-accent" title="Send traffic packets between R1 and R3">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          <span>Send Traffic (R1→R3)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="main-workspace">
+      <!-- Left / Center: Interactive Network Canvas -->
+      <div class="canvas-wrapper">
+        <div class="canvas-header-bar">
+          <div class="canvas-hints">
+            <span class="hint-item"><span class="badge badge-click">Click</span> Select Router</span>
+            <span class="hint-item"><span class="badge badge-fail">Double-Click</span> Fail/Recover Router</span>
+            <span class="hint-item"><span class="badge badge-link">Click Link</span> Cut/Restore Link</span>
+            <span class="hint-item"><span class="badge badge-drag">Drag</span> Reposition Node</span>
+          </div>
+          <div class="canvas-legend">
+            <span class="legend-item"><span class="dot dot-router-up"></span> Active Router</span>
+            <span class="legend-item"><span class="dot dot-router-down"></span> Failed Router</span>
+            <span class="legend-item"><span class="dot dot-packet-rip"></span> RIP Update</span>
+            <span class="legend-item"><span class="dot dot-packet-data"></span> Data Flow</span>
+          </div>
+        </div>
+        <canvas id="networkCanvas"></canvas>
+        <div id="canvasOverlayNotice" class="canvas-overlay-notice"></div>
+      </div>
+
+      <!-- Right Sidebar: Routing Table & Event Log -->
+      <aside class="sidebar">
+        <!-- Selected Router Inspector -->
+        <div class="panel router-inspector-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+              <span id="selectedRouterName">Router R1 Details</span>
+            </div>
+            <div class="router-actions">
+              <button id="btnToggleNodeState" class="btn btn-sm btn-danger">Fail Router</button>
+            </div>
+          </div>
+          
+          <div class="panel-body">
+            <div class="router-meta-grid">
+              <div class="meta-card">
+                <span class="meta-label">Status</span>
+                <span id="inspectorStatus" class="meta-val status-up">UP / ACTIVE</span>
+              </div>
+              <div class="meta-card">
+                <span class="meta-label">Neighbors</span>
+                <span id="inspectorNeighbors" class="meta-val">R2, R5</span>
+              </div>
+              <div class="meta-card">
+                <span class="meta-label">Total Routes</span>
+                <span id="inspectorRouteCount" class="meta-val">4</span>
+              </div>
+            </div>
+
+            <div class="table-section-title">Routing Information Base (RIB)</div>
+            <div class="table-responsive">
+              <table class="routing-table" id="routingTable">
+                <thead>
+                  <tr>
+                    <th>Dest</th>
+                    <th>Metric (Hops)</th>
+                    <th>Next Hop</th>
+                    <th>State</th>
+                  </tr>
+                </thead>
+                <tbody id="routingTableBody">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Packet Tracer Event List -->
+        <div class="panel event-log-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <span>Packet Tracer Event Log</span>
+            </div>
+            <button id="btnClearLog" class="btn btn-xs btn-ghost">Clear</button>
+          </div>
+          <div class="panel-body log-container" id="eventLogContainer">
+            <!-- Event entries populated by JS -->
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

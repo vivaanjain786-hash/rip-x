@@ -6,12 +6,27 @@ import json
 from pathlib import Path
 
 from ripx.analytics.telemetry import collect_telemetry
+from ripx.routing.bellman_ford import shortest_paths
 from ripx.simulation.scenarios import FaultEvent, Scenario, load_scenario
-from ripx.simulation.topologies import line, mesh, random_connected, ring, star
+from ripx.simulation.topologies import (
+    enterprise_like,
+    iot_edge_like,
+    line,
+    mesh,
+    random_connected,
+    ring,
+    scale_free,
+    star,
+)
 from ripx.simulation.traffic import TrafficFlow, simulate_traffic
 
 
-FACTORIES = {"line": line, "ring": ring, "star": star, "mesh": mesh}
+FACTORIES = {
+    "line": line,
+    "ring": ring,
+    "star": star,
+    "mesh": mesh,
+}
 
 
 def run_convergence_experiment(topology: str, size: int) -> dict[str, int | str]:
@@ -25,12 +40,63 @@ def run_convergence_experiment(topology: str, size: int) -> dict[str, int | str]
     }
 
 
+def run_bellman_ford_validation(topology: str, size: int) -> dict[str, object]:
+    """Compare converged RIP routing tables against standalone Bellman-Ford hop counts.
+
+    Runs the simulator to convergence, then independently computes shortest-hop
+    paths from every router using the standalone Bellman-Ford implementation.
+    Returns a report listing any destination where the RIP metric differs from
+    the Bellman-Ford distance, or an empty ``mismatches`` list when the tables
+    are consistent.
+
+    This is the end-to-end correctness check for the RIP simulator baseline.
+    """
+    network = FACTORIES[topology](size)
+    network.converge()
+
+    # Build undirected edge list with hop cost = 1 for each active link
+    active_links: list[tuple[str, str, int]] = []
+    for link in network.links.values():
+        if link.up:
+            active_links.append((link.left, link.right, 1))
+            active_links.append((link.right, link.left, 1))
+
+    router_names = list(network.routers.keys())
+    mismatches: list[dict[str, object]] = []
+    for source in router_names:
+        bf_paths = shortest_paths(router_names, active_links, source)
+        for destination in router_names:
+            if destination == source:
+                continue
+            rip_route = network.routers[source].route(destination)
+            rip_metric = rip_route.metric if rip_route is not None else None
+            bf_metric = bf_paths[destination].metric
+            # Convert inf to a sentinel for JSON serialisation
+            bf_metric_val = None if bf_metric == float("inf") else int(bf_metric)
+            if rip_metric != bf_metric_val:
+                mismatches.append(
+                    {
+                        "source": source,
+                        "destination": destination,
+                        "rip_metric": rip_metric,
+                        "bellman_ford_metric": bf_metric_val,
+                    }
+                )
+    return {
+        "topology": topology,
+        "routers": size,
+        "mismatches": mismatches,
+        "valid": len(mismatches) == 0,
+    }
+
+
 def run_scenario(path: str | Path) -> dict[str, object]:
     """Run one file-backed scenario and include its human-readable identifier."""
     scenario: Scenario = load_scenario(path)
     if scenario.events or scenario.flows:
         return run_failure_scenario(scenario)
-    if scenario.topology == "random":
+    topology = scenario.topology
+    if topology == "random":
         network = random_connected(
             scenario.routers, seed=scenario.seed, edge_probability=scenario.edge_probability
         )
@@ -42,17 +108,60 @@ def run_scenario(path: str | Path) -> dict[str, object]:
             "control_messages": convergence.control_messages,
             "seed": scenario.seed,
         }
+    elif topology == "scale_free":
+        network = scale_free(
+            scenario.routers, seed=scenario.seed, initial_clique=scenario.initial_clique
+        )
+        convergence = network.converge()
+        result = {
+            "topology": "scale_free",
+            "routers": scenario.routers,
+            "convergence_rounds": convergence.rounds,
+            "control_messages": convergence.control_messages,
+            "seed": scenario.seed,
+        }
+    elif topology == "enterprise":
+        network = enterprise_like()
+        convergence = network.converge()
+        result = {
+            "topology": "enterprise",
+            "routers": scenario.routers,
+            "convergence_rounds": convergence.rounds,
+            "control_messages": convergence.control_messages,
+        }
+    elif topology == "iot_edge":
+        network = iot_edge_like(
+            edge_hubs=scenario.edge_hubs, devices_per_hub=scenario.devices_per_hub
+        )
+        convergence = network.converge()
+        result = {
+            "topology": "iot_edge",
+            "routers": scenario.routers,
+            "convergence_rounds": convergence.rounds,
+            "control_messages": convergence.control_messages,
+        }
     else:
-        result = run_convergence_experiment(scenario.topology, scenario.routers)
+        result = run_convergence_experiment(topology, scenario.routers)
     return {"scenario": scenario.name, **result}
 
 
 def _build_network(scenario: Scenario):
-    if scenario.topology == "random":
+    topology = scenario.topology
+    if topology == "random":
         return random_connected(
             scenario.routers, seed=scenario.seed, edge_probability=scenario.edge_probability
         )
-    return FACTORIES[scenario.topology](scenario.routers)
+    if topology == "scale_free":
+        return scale_free(
+            scenario.routers, seed=scenario.seed, initial_clique=scenario.initial_clique
+        )
+    if topology == "enterprise":
+        return enterprise_like()
+    if topology == "iot_edge":
+        return iot_edge_like(
+            edge_hubs=scenario.edge_hubs, devices_per_hub=scenario.devices_per_hub
+        )
+    return FACTORIES[topology](scenario.routers)
 
 
 def _apply_event(network, event: FaultEvent) -> None:

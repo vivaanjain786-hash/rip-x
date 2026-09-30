@@ -30,33 +30,65 @@ class Scenario:
     routers: int
     seed: int = 0
     edge_probability: float = 0.25
+    # scale_free
+    initial_clique: int = 3
+    # iot_edge_like
+    edge_hubs: int = 3
+    devices_per_hub: int = 4
     events: tuple[FaultEvent, ...] = ()
     flows: tuple[FlowSpec, ...] = ()
 
 
+_VALID_TOPOLOGIES = {"line", "ring", "star", "mesh", "random", "scale_free", "enterprise", "iot_edge"}
+
+
 def load_scenario(path: str | Path) -> Scenario:
-    """Load and validate a small JSON scenario for a baseline experiment."""
+    """Load and validate a JSON scenario for a baseline experiment."""
     source = Path(path)
     try:
         data = json.loads(source.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
         raise ValueError(f"invalid JSON in {source}: {error.msg}") from error
-    required = {"name", "topology", "routers"}
+    topology = data.get("topology", "")
+    if topology not in _VALID_TOPOLOGIES:
+        raise ValueError(
+            f"baseline topology must be one of: {', '.join(sorted(_VALID_TOPOLOGIES))}"
+        )
+    required = {"name", "topology"}
+    # enterprise has a fixed size; iot_edge derives size from hubs × devices
+    if topology not in {"enterprise", "iot_edge"}:
+        required.add("routers")
     missing = required.difference(data)
     if missing:
         raise ValueError(f"scenario is missing required fields: {', '.join(sorted(missing))}")
-    if data["topology"] not in {"line", "ring", "star", "mesh", "random"}:
-        raise ValueError("baseline topology must be one of: line, ring, star, mesh, random")
-    if not isinstance(data["routers"], int) or data["routers"] < 2:
-        raise ValueError("routers must be an integer of at least 2")
     if not isinstance(data["name"], str) or not data["name"].strip():
         raise ValueError("name must be a non-empty string")
+    # Derive router count for fixed topologies
+    if topology == "enterprise":
+        routers = 10  # 2 core + 3 dist + 5 access
+    elif topology == "iot_edge":
+        edge_hubs = data.get("edge_hubs", 3)
+        devices_per_hub = data.get("devices_per_hub", 4)
+        if not isinstance(edge_hubs, int) or edge_hubs < 1:
+            raise ValueError("edge_hubs must be a positive integer")
+        if not isinstance(devices_per_hub, int) or devices_per_hub < 1:
+            raise ValueError("devices_per_hub must be a positive integer")
+        routers = 1 + edge_hubs + edge_hubs * devices_per_hub
+    else:
+        routers = data["routers"]
+        if not isinstance(routers, int) or routers < 2:
+            raise ValueError("routers must be an integer of at least 2")
     seed = data.get("seed", 0)
     probability = data.get("edge_probability", 0.25)
     if not isinstance(seed, int):
         raise ValueError("seed must be an integer")
     if not isinstance(probability, (int, float)) or not 0 <= probability <= 1:
         raise ValueError("edge_probability must be between 0 and 1")
+    initial_clique = data.get("initial_clique", 3)
+    if not isinstance(initial_clique, int) or initial_clique < 1:
+        raise ValueError("initial_clique must be a positive integer")
+    edge_hubs = data.get("edge_hubs", 3)
+    devices_per_hub = data.get("devices_per_hub", 4)
     events_data = data.get("events", [])
     if not isinstance(events_data, list):
         raise ValueError("events must be a list")
@@ -102,5 +134,14 @@ def load_scenario(path: str | Path) -> Scenario:
             raise ValueError(f"flow {index} requires a non-negative rate_mbps")
         flows.append(FlowSpec(source, destination, float(rate)))
     return Scenario(
-        data["name"], data["topology"], data["routers"], seed, float(probability), tuple(events), tuple(flows)
+        name=data["name"],
+        topology=data["topology"],
+        routers=routers,
+        seed=seed,
+        edge_probability=float(probability),
+        initial_clique=initial_clique,
+        edge_hubs=edge_hubs,
+        devices_per_hub=devices_per_hub,
+        events=tuple(events),
+        flows=tuple(flows),
     )
