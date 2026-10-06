@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const COLORS = { rip: '#F5F5F5', ripx: '#39FF14' };
+  const COLORS = { rip: '#3A4DA1', ripx: '#6BB5E4' };
   const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fmt = (n, d = 0) => Number(n).toLocaleString(undefined, { maximumFractionDigits: d });
 
@@ -40,18 +40,20 @@
     let g = '';
     for (let i = 0; i <= 4; i++) {
       const v = (yMax * i) / 4;
-      g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(165,107,224,.14)"/>` +
-           `<text x="${L - 6}" y="${y(v) + 4}" fill="#a9a4b8" font-size="11" text-anchor="end">${fmt(v)}</text>`;
+      g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(107,181,228,.12)"/>` +
+           `<text x="${L - 6}" y="${y(v) + 4}" fill="rgba(241,241,241,.68)" font-size="11" text-anchor="end">${fmt(v)}</text>`;
     }
     Object.entries(events).forEach(([round, name]) => {
-      g += `<line x1="${x(round)}" x2="${x(round)}" y1="${T}" y2="${H - B}" stroke="rgba(143,63,214,.4)" stroke-dasharray="2 4"/>` +
-           `<text x="${x(round) + 3}" y="${T + 10}" fill="#64748b" font-size="9">${name.replace('_', ' ')}</text>`;
+      g += `<line x1="${x(round)}" x2="${x(round)}" y1="${T}" y2="${H - B}" stroke="rgba(241,241,241,.28)" stroke-dasharray="2 4"/>` +
+           `<text x="${x(round) + 3}" y="${T + 10}" fill="rgba(241,241,241,.5)" font-size="9">${name.replace('_', ' ')}</text>`;
     });
     ['rip', 'ripx'].forEach(k => {
       const d = series[k].map((p, i) => `${i ? 'L' : 'M'}${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`).join('');
-      g += `<path class="line" pathLength="1" d="${d}" fill="none" stroke="${COLORS[k]}" style="color:${COLORS[k]}" stroke-width="1.8"/>`;
+      const last = series[k][series[k].length - 1];
+      g += k === 'ripx' ? `<path class="area" d="${d}L${x(last.x).toFixed(1)},${y(0).toFixed(1)}L${x(0).toFixed(1)},${y(0).toFixed(1)}Z" fill="${COLORS[k]}" fill-opacity=".1"/>` : '';
+      g += `<path class="line" pathLength="1" d="${d}" fill="none" stroke="${COLORS[k]}" style="color:${COLORS[k]}" stroke-width="${k === 'ripx' ? 2.4 : 2.8}" stroke-linejoin="round"/>`;
     });
-    g += `<text x="${(L + W) / 2}" y="${H - 6}" fill="#a9a4b8" font-size="11" text-anchor="middle">round</text>`;
+    g += `<text x="${(L + W) / 2}" y="${H - 6}" fill="rgba(241,241,241,.68)" font-size="11" text-anchor="middle">round</text>`;
     return `<div class="chart"><h3>${title}</h3><svg viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
   }
 
@@ -63,8 +65,8 @@
     items.forEach((it, i) => {
       const x = L + i * (bw + gap), h = (it.value / top) * (H - T - B);
       g += `<rect x="${x}" y="${H - B - h}" width="${bw}" height="${h}" fill="${it.color}" rx="3"/>` +
-           `<text x="${x + bw / 2}" y="${H - B - h - 5}" fill="#F5F5F5" font-size="12" text-anchor="middle">${it.label}</text>` +
-           `<text x="${x + bw / 2}" y="${H - 14}" fill="#a9a4b8" font-size="11" text-anchor="middle">${it.name}</text>`;
+           `<text x="${x + bw / 2}" y="${H - B - h - 5}" fill="#F1F1F1" font-size="12" text-anchor="middle">${it.label}</text>` +
+           `<text x="${x + bw / 2}" y="${H - 14}" fill="rgba(241,241,241,.68)" font-size="11" text-anchor="middle">${it.name}</text>`;
     });
     return `<div class="chart"><h3>${title}</h3><svg viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
   }
@@ -228,6 +230,12 @@
     const arrow = !sure ? '≈' : (s.mean < 0 ? '▼' : '▲');
     return `<td class="v chg ${cls}" title="Paired difference vs RIP, 95% CI ${fmt(s.ci95_low, d)} to ${fmt(s.ci95_high, d)}${sure ? '' : ' (not distinguishable from noise)'}"><b>${arrow} ${s.mean > 0 ? '+' : ''}${fmt(s.mean, d)}</b><small>${fmt(s.ci95_low, d)} – ${fmt(s.ci95_high, d)}</small></td>`;
   };
+  const tag = (s, lowerIsBetter = true) => {
+    if (!s) return '';
+    const sure = s.ci95_low > 0 || s.ci95_high < 0;
+    if (!sure) return '<span class="tag">[ == ]</span>';
+    return (s.mean < 0) === lowerIsBetter ? '<span class="tag ok">[ OK ]</span>' : '<span class="tag warn">▲WARN</span>';
+  };
   const grid = (names, rows) =>
     `<div class="tablewrap"><table class="grid"><thead><tr><th>Metric</th>${names.map(n => `<th class="v">${label(n)}</th>`).join('')}<th class="v">Change vs RIP</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 
@@ -239,18 +247,18 @@
       ['link_failure_convergence_rounds', 'Link failure repair (rounds)'], ['router_failure_convergence_rounds', 'Router failure repair (rounds)'],
       ['blackhole_pair_rounds', 'Black-holed pair-rounds'], ['loop_pair_rounds', 'Looping pair-rounds'], ['route_changes', 'Route changes']
     ];
-    const body = names => rows.map(([k, l]) => `<tr><td class="m">${l}</td>${names.map(n => val(u[n][k], 1)).join('')}${change(u.ripx?.[k]?.paired_difference_vs_rip, 1)}</tr>`).join('');
+    const body = names => rows.map(([k, l]) => `<tr><td class="m">${tag(u.ripx?.[k]?.paired_difference_vs_rip)}${l}</td>${names.map(n => val(u[n][k], 1)).join('')}${change(u.ripx?.[k]?.paired_difference_vs_rip, 1)}</tr>`).join('');
     const others = Object.keys(u).filter(n => n !== 'rip' && n !== 'ripx');
     let html = `<p class="note">${b.seeds} seeds, from the ${b.source}.</p>` + grid(['rip', 'ripx'], body(['rip', 'ripx']));
     if (others.length) {
-      const sub = n => rows.map(([k, l]) => `<tr><td class="m">${l}</td>${val(u.rip[k], 1)}${val(u[n][k], 1)}${change(u[n][k].paired_difference_vs_rip, 1)}</tr>`).join('');
+      const sub = n => rows.map(([k, l]) => `<tr><td class="m">${tag(u[n][k].paired_difference_vs_rip)}${l}</td>${val(u.rip[k], 1)}${val(u[n][k], 1)}${change(u[n][k].paired_difference_vs_rip, 1)}</tr>`).join('');
       html += `<details class="abl"><summary>Ablations: which RIP-X feature does what</summary>` +
         others.map(n => `<h3 class="sub">${label(n)}</h3>` + `<div class="tablewrap"><table class="grid"><thead><tr><th>Metric</th><th class="v">RIP</th><th class="v">${label(n)}</th><th class="v">Change vs RIP</th></tr></thead><tbody>${sub(n)}</tbody></table></div>`).join('') + '</details>';
     }
     const t = b.traffic_engineering;
     html += `<h3 class="sub">Traffic engineering</h3>` + grid(['rip', 'ripx'],
       [['delivered_ratio', 'Delivered / offered', 3, false], ['maximum_utilization', 'Peak link utilization', 2, true], ['mean_path_hops', 'Mean path length (hops)', 2, true]].map(([k, l, d, lower]) =>
-        `<tr><td class="m">${l}</td>${val(t.rip[k], d)}${val(t.ripx[k], d)}${change(t.ripx[k].paired_difference_vs_rip, d, lower)}</tr>`).join('')) +
+        `<tr><td class="m">${tag(t.ripx[k].paired_difference_vs_rip, lower)}${l}</td>${val(t.rip[k], d)}${val(t.ripx[k], d)}${change(t.ripx[k].paired_difference_vs_rip, d, lower)}</tr>`).join('')) +
       `<p class="note">RIP-X delivered more traffic in ${t.ripx.trials_improved} trials and less in ${t.ripx.trials_worse}.</p>`;
     $('bmBody').innerHTML = html;
   }
