@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RIP-X Dashboard | RIP vs RIP-X</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body { overflow: auto; background: var(--bg-primary); color: var(--text-main); font-family: var(--font-sans); }
+    .wrap { max-width: 1240px; margin: 0 auto; padding: 20px 16px 60px; }
+    nav { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+    nav h1 { font-size: 20px; flex: 1; }
+    nav a { color: var(--accent-cyan); text-decoration: none; font-size: 14px; }
+    .engine { font-size: 12px; color: var(--text-muted); }
+    section { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 18px; }
+    section h2 { font-size: 16px; margin-bottom: 4px; }
+    section p.hint { color: var(--text-muted); font-size: 13px; margin-bottom: 12px; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+    label { font-size: 12px; color: var(--text-muted); display: flex; gap: 6px; align-items: center; }
+    input[type=number] { width: 72px; background: var(--bg-tertiary); color: var(--text-main); border: 1px solid var(--panel-border); border-radius: var(--radius-sm); padding: 6px; }
+    button.go { background: var(--accent-blue); color: #fff; border: 0; border-radius: var(--radius-sm); padding: 8px 14px; font-weight: 600; cursor: pointer; }
+    button.go:disabled { opacity: .5; cursor: wait; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .card { background: var(--bg-secondary); border: 1px solid var(--panel-border); border-radius: var(--radius-md); padding: 10px 12px; }
+    .card .k { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .card .v { font-size: 20px; font-weight: 700; margin-top: 2px; font-family: var(--font-mono); }
+    .card .d { font-size: 12px; margin-top: 2px; }
+    .good { color: var(--accent-emerald); } .bad { color: var(--accent-rose); } .flat { color: var(--text-muted); }
+    .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+    .chart { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 8px; }
+    .chart h3 { font-size: 12px; color: var(--text-muted); font-weight: 600; margin: 2px 4px 4px; }
+    svg { width: 100%; height: auto; display: block; }
+    .legend { font-size: 12px; color: var(--text-muted); display: flex; gap: 14px; margin: 6px 4px 0; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--panel-border); }
+    th { color: var(--text-muted); font-weight: 600; }
+    td.num { font-family: var(--font-mono); white-space: nowrap; }
+    .note { font-size: 12.5px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+    .err { color: var(--accent-rose); font-size: 13px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <h1>RIP-X Dashboard <span class="engine" id="engine"></span></h1>
+    <a href="index.html">← Live network simulator</a>
+  </nav>
+
+  <section id="cmp">
+    <h2>1. Same failures, standard RIP vs RIP-X</h2>
+    <p class="hint">Both protocols run on the identical random topology. A link fails and recovers, then a router fails and recovers (dotted lines). Every round the routing tables are checked against Bellman-Ford.</p>
+    <div class="row">
+      <label>Routers <input type="number" id="cmpRouters" value="16" min="6" max="40"></label>
+      <label>Seed <input type="number" id="cmpSeed" value="0" min="0"></label>
+      <button class="go" id="cmpGo">Run comparison</button>
+      <span class="err" id="cmpErr"></span>
+    </div>
+    <div class="cards" id="cmpCards"></div>
+    <div class="charts" id="cmpCharts"></div>
+    <div class="legend"><span><i style="background:#f59e0b"></i>Standard RIP</span><span><i style="background:#06b6d4"></i>RIP-X</span></div>
+  </section>
+
+  <section id="te">
+    <h2>2. Traffic engineering</h2>
+    <p class="hint">Random flows on a 12-router network with mixed link capacities. RIP-X raises the cost of overloaded links and lets routing move flows away.</p>
+    <div class="row">
+      <label>Seed <input type="number" id="teSeed" value="0" min="0"></label>
+      <button class="go" id="teGo">Run traffic engineering</button>
+      <span class="err" id="teErr"></span>
+    </div>
+    <div class="cards" id="teCards"></div>
+    <table id="teTable" hidden><thead><tr><th>Epoch</th><th>Delivered (Mbps)</th><th>Peak utilization</th><th>Links made costlier</th><th>Control msgs</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <section id="bm">
+    <h2>3. Benchmark (many seeds, with confidence intervals)</h2>
+    <p class="hint">Shows the newest saved results. Run a fresh benchmark here (a few seeds takes about 10-40 seconds), or use <code>python -m ripx.benchmark --seeds 30</code> for the full run.</p>
+    <div class="row">
+      <label>Seeds <input type="number" id="bmSeeds" value="5" min="2" max="30"></label>
+      <button class="go" id="bmGo">Run benchmark</button>
+      <span id="bmStatus" class="flat"></span>
+    </div>
+    <div id="bmBody"></div>
+  </section>
+</div>
+<script src="dashboard.js"></script>
+</body>
+</html>

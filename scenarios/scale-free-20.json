@@ -1,0 +1,7 @@
+{
+  "name": "scale-free-20",
+  "topology": "scale_free",
+  "routers": 20,
+  "seed": 42,
+  "initial_clique": 3
+}
