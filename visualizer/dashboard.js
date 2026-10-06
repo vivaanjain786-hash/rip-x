@@ -6,6 +6,14 @@
   const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fmt = (n, d = 0) => Number(n).toLocaleString(undefined, { maximumFractionDigits: d });
 
+  // Themed number steppers: wrap each number input with - / + buttons (native spinners are hidden in CSS).
+  document.querySelectorAll('input[type=number]').forEach(input => {
+    const box = document.createElement('span'); box.className = 'num';
+    const mk = (txt, dir) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.setAttribute('aria-label', dir < 0 ? 'decrease' : 'increase');
+      b.onclick = () => { dir < 0 ? input.stepDown() : input.stepUp(); input.dispatchEvent(new Event('change', { bubbles: true })); }; return b; };
+    input.replaceWith(box); box.append(mk('−', -1), input, mk('+', 1));
+  });
+
   async function api(path, body) {
     const res = await fetch(path, body === undefined ? {} : {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
@@ -33,7 +41,7 @@
     for (let i = 0; i <= 4; i++) {
       const v = (yMax * i) / 4;
       g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(0,240,255,.1)"/>` +
-           `<text x="${L - 6}" y="${y(v) + 4}" fill="#9d8fc7" font-size="10" text-anchor="end">${fmt(v)}</text>`;
+           `<text x="${L - 6}" y="${y(v) + 4}" fill="#9d8fc7" font-size="11" text-anchor="end">${fmt(v)}</text>`;
     }
     Object.entries(events).forEach(([round, name]) => {
       g += `<line x1="${x(round)}" x2="${x(round)}" y1="${T}" y2="${H - B}" stroke="rgba(255,43,214,.4)" stroke-dasharray="2 4"/>` +
@@ -43,7 +51,7 @@
       const d = series[k].map((p, i) => `${i ? 'L' : 'M'}${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`).join('');
       g += `<path class="line" pathLength="1" d="${d}" fill="none" stroke="${COLORS[k]}" style="color:${COLORS[k]}" stroke-width="1.8"/>`;
     });
-    g += `<text x="${(L + W) / 2}" y="${H - 6}" fill="#9d8fc7" font-size="10" text-anchor="middle">round</text>`;
+    g += `<text x="${(L + W) / 2}" y="${H - 6}" fill="#9d8fc7" font-size="11" text-anchor="middle">round</text>`;
     return `<div class="chart"><h3>${title}</h3><svg viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
   }
 
@@ -200,7 +208,7 @@
       ['blackhole_pair_rounds', 'Black-holed pair-rounds'], ['loop_pair_rounds', 'Looping pair-rounds'], ['route_changes', 'Route changes']
     ];
     const names = Object.keys(u);
-    let html = `<p class="note">${b.seeds} seeds, from the ${b.source}. Cells: mean [95% CI]. Δ = paired difference against standard RIP (green = better, red = worse, grey = not distinguishable from noise).</p>` +
+    let html = `<p class="note">${b.seeds} seeds, from the ${b.source}.</p>` +
       `<div style="overflow-x:auto"><table><thead><tr><th>Metric</th>${names.map(n => `<th>${n}</th>`).join('')}${names.slice(1).map(n => `<th>Δ ${n}</th>`).join('')}</tr></thead><tbody>` +
       rows.map(([k, l]) => `<tr><td>${l}</td>${names.map(n => `<td class="num">${ci(u[n][k])}</td>`).join('')}` +
         `${names.slice(1).map(n => `<td class="num">${delta(u[n][k].paired_difference_vs_rip)}</td>`).join('')}</tr>`).join('') + '</tbody></table></div>';
