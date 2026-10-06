@@ -8,7 +8,7 @@
 
   // Themed number steppers: wrap each number input with - / + buttons (native spinners are hidden in CSS).
   document.querySelectorAll('input[type=number]').forEach(input => {
-    const box = document.createElement('span'); box.className = 'num';
+    const box = document.createElement('span'); box.className = 'stepper';
     const mk = (txt, dir) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.setAttribute('aria-label', dir < 0 ? 'decrease' : 'increase');
       b.onclick = () => { dir < 0 ? input.stepDown() : input.stepUp(); input.dispatchEvent(new Event('change', { bubbles: true })); }; return b; };
     input.replaceWith(box); box.append(mk('−', -1), input, mk('+', 1));
@@ -217,32 +217,41 @@
   });
 
   // ---- 3. benchmark ----------------------------------------------------------
-  const ci = s => `${fmt(s.mean, 1)} <span class="flat">[${fmt(s.ci95_low, 1)}, ${fmt(s.ci95_high, 1)}]</span>`;
-  const delta = (s, lowerIsBetter = true) => {
-    if (!s) return '';
-    const cls = s.ci95_low > 0 || s.ci95_high < 0 ? ((s.mean < 0) === lowerIsBetter ? 'good' : 'bad') : 'flat';
-    return `<span class="${cls}">${s.mean > 0 ? '+' : ''}${fmt(s.mean, 1)} <span class="flat">[${fmt(s.ci95_low, 1)}, ${fmt(s.ci95_high, 1)}]</span></span>`;
+  // One clean grid per table: Metric | RIP | RIP-X | Change. The 95% interval is small and dim under each value and in the tooltip.
+  const PROFILE = { rip: 'RIP', ripx: 'RIP-X', 'rip+requests': 'RIP + requests', 'adaptive-only': 'Adaptive only' };
+  const label = n => PROFILE[n] || n;
+  const val = (stat, d) => `<td class="v" title="95% CI ${fmt(stat.ci95_low, d)} to ${fmt(stat.ci95_high, d)}"><b>${fmt(stat.mean, d)}</b><small>${fmt(stat.ci95_low, d)} – ${fmt(stat.ci95_high, d)}</small></td>`;
+  const change = (s, d, lowerIsBetter = true) => {
+    if (!s) return '<td class="v chg flat">–</td>';
+    const sure = s.ci95_low > 0 || s.ci95_high < 0;
+    const cls = sure ? ((s.mean < 0) === lowerIsBetter ? 'good' : 'bad') : 'flat';
+    const arrow = !sure ? '≈' : (s.mean < 0 ? '▼' : '▲');
+    return `<td class="v chg ${cls}" title="Paired difference vs RIP, 95% CI ${fmt(s.ci95_low, d)} to ${fmt(s.ci95_high, d)}${sure ? '' : ' (not distinguishable from noise)'}"><b>${arrow} ${s.mean > 0 ? '+' : ''}${fmt(s.mean, d)}</b><small>${fmt(s.ci95_low, d)} – ${fmt(s.ci95_high, d)}</small></td>`;
   };
+  const grid = (names, rows) =>
+    `<div class="tablewrap"><table class="grid"><thead><tr><th>Metric</th>${names.map(n => `<th class="v">${label(n)}</th>`).join('')}<th class="v">Change vs RIP</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 
   function showBenchmark(b) {
     if (!b.source) { $('bmBody').innerHTML = '<p class="note">No saved benchmark yet. Run one above.</p>'; return; }
     const u = b.update_control;
     const rows = [
       ['control_messages', 'Control messages (whole run)'], ['stable_control_messages', 'Control messages (stable period)'],
-      ['link_failure_convergence_rounds', 'Convergence after link failure (rounds)'], ['router_failure_convergence_rounds', 'Convergence after router failure (rounds)'],
+      ['link_failure_convergence_rounds', 'Link failure repair (rounds)'], ['router_failure_convergence_rounds', 'Router failure repair (rounds)'],
       ['blackhole_pair_rounds', 'Black-holed pair-rounds'], ['loop_pair_rounds', 'Looping pair-rounds'], ['route_changes', 'Route changes']
     ];
-    const names = Object.keys(u);
-    let html = `<p class="note">${b.seeds} seeds, from the ${b.source}.</p>` +
-      `<div style="overflow-x:auto"><table><thead><tr><th>Metric</th>${names.map(n => `<th>${n}</th>`).join('')}${names.slice(1).map(n => `<th>Δ ${n}</th>`).join('')}</tr></thead><tbody>` +
-      rows.map(([k, l]) => `<tr><td>${l}</td>${names.map(n => `<td class="num">${ci(u[n][k])}</td>`).join('')}` +
-        `${names.slice(1).map(n => `<td class="num">${delta(u[n][k].paired_difference_vs_rip)}</td>`).join('')}</tr>`).join('') + '</tbody></table></div>';
+    const body = names => rows.map(([k, l]) => `<tr><td class="m">${l}</td>${names.map(n => val(u[n][k], 1)).join('')}${change(u.ripx?.[k]?.paired_difference_vs_rip, 1)}</tr>`).join('');
+    const others = Object.keys(u).filter(n => n !== 'rip' && n !== 'ripx');
+    let html = `<p class="note">${b.seeds} seeds, from the ${b.source}.</p>` + grid(['rip', 'ripx'], body(['rip', 'ripx']));
+    if (others.length) {
+      const sub = n => rows.map(([k, l]) => `<tr><td class="m">${l}</td>${val(u.rip[k], 1)}${val(u[n][k], 1)}${change(u[n][k].paired_difference_vs_rip, 1)}</tr>`).join('');
+      html += `<details class="abl"><summary>Ablations: which RIP-X feature does what</summary>` +
+        others.map(n => `<h3 class="sub">${label(n)}</h3>` + `<div class="tablewrap"><table class="grid"><thead><tr><th>Metric</th><th class="v">RIP</th><th class="v">${label(n)}</th><th class="v">Change vs RIP</th></tr></thead><tbody>${sub(n)}</tbody></table></div>`).join('') + '</details>';
+    }
     const t = b.traffic_engineering;
-    html += `<h3 style="margin:16px 0 6px;font-size:14px">Traffic engineering</h3><table><thead><tr><th>Metric</th><th>rip</th><th>ripx</th><th>Δ ripx</th></tr></thead><tbody>` +
+    html += `<h3 class="sub">Traffic engineering</h3>` + grid(['rip', 'ripx'],
       [['delivered_ratio', 'Delivered / offered', 3, false], ['maximum_utilization', 'Peak link utilization', 2, true], ['mean_path_hops', 'Mean path length (hops)', 2, true]].map(([k, l, d, lower]) =>
-        `<tr><td>${l}</td><td class="num">${fmt(t.rip[k].mean, d)}</td><td class="num">${fmt(t.ripx[k].mean, d)}</td>` +
-        `<td class="num">${delta(t.ripx[k].paired_difference_vs_rip, lower)}</td></tr>`).join('') +
-      `</tbody></table><p class="note">RIP-X delivered more traffic in ${t.ripx.trials_improved} trials and less in ${t.ripx.trials_worse}.</p>`;
+        `<tr><td class="m">${l}</td>${val(t.rip[k], d)}${val(t.ripx[k], d)}${change(t.ripx[k].paired_difference_vs_rip, d, lower)}</tr>`).join('')) +
+      `<p class="note">RIP-X delivered more traffic in ${t.ripx.trials_improved} trials and less in ${t.ripx.trials_worse}.</p>`;
     $('bmBody').innerHTML = html;
   }
 

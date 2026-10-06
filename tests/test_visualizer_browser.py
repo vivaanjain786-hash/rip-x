@@ -118,3 +118,16 @@ def test_dashboard_chart_zooms_on_hover_and_closes_with_escape(page):
     page.keyboard.press("Escape")
     page.wait_for_selector("#zoom:not(.open)", timeout=5000)
     assert page.errors == []
+
+
+def test_benchmark_tables_are_aligned_and_do_not_wrap(page):
+    page.goto(page.url.rsplit("/", 1)[0] + "/dashboard.html")
+    page.wait_for_selector("#bmBody table.grid", timeout=60000)
+    assert page.locator("#bmBody table.grid").count() >= 2
+    for table in page.locator("#bmBody table.grid").all():
+        heads = table.locator("thead th").count()
+        assert heads == 4
+        for row in table.locator("tbody tr").all():
+            assert row.locator("td").count() == heads
+            assert row.bounding_box()["height"] < 70  # one value + one dim interval line, no wrapped pills
+    assert page.errors == []
