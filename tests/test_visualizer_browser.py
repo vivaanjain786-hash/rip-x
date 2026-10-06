@@ -106,3 +106,15 @@ def test_dashboard_respects_reduced_motion(page):
     assert first[0].replace(",", "") == first[1]
     assert page.evaluate("getComputedStyle(document.querySelector('.kpi'), '::before').animationName") == "none"
     assert page.errors == []
+
+
+def test_dashboard_chart_zooms_on_hover_and_closes_with_escape(page):
+    page.goto(page.url.rsplit("/", 1)[0] + "/dashboard.html")
+    page.wait_for_selector("#cmpCharts .chart", timeout=60000)
+    page.hover("#cmpCharts .chart")
+    page.wait_for_selector("#zoom.open .chart", timeout=5000)
+    assert page.locator("#zoom svg").count() == 1
+    assert page.locator("#zoom .chart").bounding_box()["width"] > page.locator("#cmpCharts .chart").first.bounding_box()["width"]
+    page.keyboard.press("Escape")
+    page.wait_for_selector("#zoom:not(.open)", timeout=5000)
+    assert page.errors == []

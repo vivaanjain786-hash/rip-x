@@ -133,6 +133,31 @@
     }, { passive: true });
   }
 
+  // ---- chart zoom: hover (after a short pause) or tap enlarges a chart into a centred overlay; leave, backdrop click or Esc closes ----
+  (function () {
+    const zoom = $('zoom');
+    let timer = 0, current = null;
+    const close = () => { clearTimeout(timer); zoom.classList.remove('open'); current = null; };
+    const open = chart => {
+      if (current === chart) return;
+      current = chart;
+      zoom.innerHTML = chart.outerHTML + '<div class="hintkey">ESC OR MOVE AWAY TO CLOSE</div>';
+      zoom.querySelector('.chart').style.animation = 'none';
+      requestAnimationFrame(() => zoom.classList.add('open'));
+    };
+    const chartOf = ev => ev.target.closest?.('#cmpCharts .chart');
+    document.addEventListener('pointerover', ev => {
+      const c = chartOf(ev);
+      if (!c || ev.pointerType !== 'mouse' || zoom.classList.contains('open')) return;
+      clearTimeout(timer); timer = setTimeout(() => open(c), 350);
+    });
+    document.addEventListener('pointerout', ev => { if (chartOf(ev) && !ev.relatedTarget?.closest?.('.chart')) clearTimeout(timer); });
+    document.addEventListener('click', ev => { const c = chartOf(ev); if (c && !zoom.classList.contains('open')) open(c); });
+    zoom.addEventListener('pointerleave', close);
+    zoom.addEventListener('click', ev => { if (!ev.target.closest('.chart')) close(); });
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') close(); });
+  })();
+
   // ---- 1. comparison -------------------------------------------------------
   function convergenceRounds(run, start, end) {
     // Rounds after the event until every routing table is correct again.
