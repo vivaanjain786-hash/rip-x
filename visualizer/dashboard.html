@@ -4,40 +4,233 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RIP-X Dashboard | RIP vs RIP-X</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <style>
-    body { overflow: auto; background: var(--bg-primary); color: var(--text-main); font-family: var(--font-sans); }
-    .wrap { max-width: 1240px; margin: 0 auto; padding: 20px 16px 60px; }
-    nav { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
-    nav h1 { font-size: 20px; flex: 1; }
-    nav a { color: var(--accent-cyan); text-decoration: none; font-size: 14px; }
-    .engine { font-size: 12px; color: var(--text-muted); }
-    section { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 18px; }
-    section h2 { font-size: 16px; margin-bottom: 4px; }
-    section p.hint { color: var(--text-muted); font-size: 13px; margin-bottom: 12px; }
-    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
-    label { font-size: 12px; color: var(--text-muted); display: flex; gap: 6px; align-items: center; }
-    input[type=number] { width: 72px; background: var(--bg-tertiary); color: var(--text-main); border: 1px solid var(--panel-border); border-radius: var(--radius-sm); padding: 6px; }
-    button.go { background: var(--accent-blue); color: #fff; border: 0; border-radius: var(--radius-sm); padding: 8px 14px; font-weight: 600; cursor: pointer; }
-    button.go:disabled { opacity: .5; cursor: wait; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
-    .card { background: var(--bg-secondary); border: 1px solid var(--panel-border); border-radius: var(--radius-md); padding: 10px 12px; }
-    .card .k { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
-    .card .v { font-size: 20px; font-weight: 700; margin-top: 2px; font-family: var(--font-mono); }
-    .card .d { font-size: 12px; margin-top: 2px; }
-    .good { color: var(--accent-emerald); } .bad { color: var(--accent-rose); } .flat { color: var(--text-muted); }
-    .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
-    .chart { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 8px; }
-    .chart h3 { font-size: 12px; color: var(--text-muted); font-weight: 600; margin: 2px 4px 4px; }
+    :root {
+      --bg-primary: #f7f5ee;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f4f1e8;
+      --panel-bg: #ffffff;
+      --panel-border: #e6e1d6;
+      --panel-border-bright: #d5cebf;
+
+      --text-main: #18181b;
+      --text-muted: #736f66;
+      --text-dim: #948e82;
+
+      --accent-blue: #18181b;
+      --accent-cyan: #1e40af;
+      --accent-emerald: #15803d;
+      --accent-rose: #b83a2b;
+
+      --color-rip: #b83a2b;
+      --color-ripx: #1e40af;
+
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 10px;
+
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+    }
+
+    body {
+      overflow: auto;
+      background: var(--bg-primary);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 20px 60px; }
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 22px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+    nav h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: -0.02em;
+      flex: 1;
+    }
+    nav a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 6px 12px;
+      background: #ffffff;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-sm);
+      transition: all 0.15s ease;
+    }
+    nav a:hover {
+      background: #fbf9f4;
+      border-color: var(--panel-border-bright);
+    }
+    .engine { font-size: 12px; color: var(--text-muted); font-weight: 400; }
+    section {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-lg);
+      padding: 22px 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+    section h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 4px;
+      letter-spacing: -0.01em;
+    }
+    section p.hint {
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
+    label {
+      font-size: 11.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    input[type=number] {
+      width: 76px;
+      background: #ffffff;
+      color: var(--text-main);
+      border: 1px solid #dcd7cc;
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    input[type=number]:focus {
+      border-color: #18181b;
+      box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.08);
+    }
+    button.go {
+      background: #18181b;
+      color: #ffffff;
+      border: 1px solid #18181b;
+      border-radius: var(--radius-sm);
+      padding: 7px 16px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+    button.go:hover { background: #27272a; border-color: #27272a; }
+    button.go:active { background: #09090b; }
+    button.go:disabled { opacity: .45; cursor: wait; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .card {
+      background: #ffffff;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    }
+    .card .k {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      font-weight: 600;
+    }
+    .card .v {
+      font-size: 20px;
+      font-weight: 700;
+      margin-top: 3px;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+    }
+    .card .d { font-size: 12px; margin-top: 3px; font-weight: 500; }
+    .good { color: var(--accent-emerald); }
+    .bad { color: var(--accent-rose); }
+    .flat { color: var(--text-muted); }
+    .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+    .chart {
+      background: #ffffff;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-md);
+      padding: 12px 14px 10px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    }
+    .chart h3 {
+      font-size: 12.5px;
+      color: var(--text-main);
+      font-weight: 700;
+      margin: 2px 4px 6px;
+    }
     svg { width: 100%; height: auto; display: block; }
-    .legend { font-size: 12px; color: var(--text-muted); display: flex; gap: 14px; margin: 6px 4px 0; }
-    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--panel-border); }
-    th { color: var(--text-muted); font-weight: 600; }
-    td.num { font-family: var(--font-mono); white-space: nowrap; }
+    .legend {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 16px;
+      margin: 12px 4px 0;
+      font-weight: 500;
+    }
+    .legend i {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 6px;
+      vertical-align: -1px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      background: #ffffff;
+    }
+    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--panel-border); }
+    th {
+      background: #faf8f4;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    td { color: var(--text-main); }
+    td.num { font-family: var(--font-mono); white-space: nowrap; font-size: 12px; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fbf9f5; }
+    code {
+      background: #f1ede3;
+      color: var(--text-main);
+      border: 1px solid #e2ddd0;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
     .note { font-size: 12.5px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
-    .err { color: var(--accent-rose); font-size: 13px; }
+    .err { color: var(--accent-rose); font-size: 13px; font-weight: 500; }
   </style>
 </head>
 <body>
@@ -58,7 +251,7 @@
     </div>
     <div class="cards" id="cmpCards"></div>
     <div class="charts" id="cmpCharts"></div>
-    <div class="legend"><span><i style="background:#f59e0b"></i>Standard RIP</span><span><i style="background:#06b6d4"></i>RIP-X</span></div>
+    <div class="legend"><span><i style="background:#b83a2b"></i>Standard RIP</span><span><i style="background:#1e40af"></i>RIP-X</span></div>
   </section>
 
   <section id="te">
