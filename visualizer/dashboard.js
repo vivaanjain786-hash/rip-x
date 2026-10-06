@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const COLORS = { rip: '#ffb400', ripx: '#00f0ff' };
+  const COLORS = { rip: '#F5F5F5', ripx: '#39FF14' };
   const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fmt = (n, d = 0) => Number(n).toLocaleString(undefined, { maximumFractionDigits: d });
 
@@ -40,18 +40,18 @@
     let g = '';
     for (let i = 0; i <= 4; i++) {
       const v = (yMax * i) / 4;
-      g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(0,240,255,.1)"/>` +
-           `<text x="${L - 6}" y="${y(v) + 4}" fill="#9d8fc7" font-size="11" text-anchor="end">${fmt(v)}</text>`;
+      g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(57,255,20,.1)"/>` +
+           `<text x="${L - 6}" y="${y(v) + 4}" fill="#a9a4b8" font-size="11" text-anchor="end">${fmt(v)}</text>`;
     }
     Object.entries(events).forEach(([round, name]) => {
-      g += `<line x1="${x(round)}" x2="${x(round)}" y1="${T}" y2="${H - B}" stroke="rgba(255,43,214,.4)" stroke-dasharray="2 4"/>` +
+      g += `<line x1="${x(round)}" x2="${x(round)}" y1="${T}" y2="${H - B}" stroke="rgba(143,63,214,.4)" stroke-dasharray="2 4"/>` +
            `<text x="${x(round) + 3}" y="${T + 10}" fill="#64748b" font-size="9">${name.replace('_', ' ')}</text>`;
     });
     ['rip', 'ripx'].forEach(k => {
       const d = series[k].map((p, i) => `${i ? 'L' : 'M'}${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`).join('');
       g += `<path class="line" pathLength="1" d="${d}" fill="none" stroke="${COLORS[k]}" style="color:${COLORS[k]}" stroke-width="1.8"/>`;
     });
-    g += `<text x="${(L + W) / 2}" y="${H - 6}" fill="#9d8fc7" font-size="11" text-anchor="middle">round</text>`;
+    g += `<text x="${(L + W) / 2}" y="${H - 6}" fill="#a9a4b8" font-size="11" text-anchor="middle">round</text>`;
     return `<div class="chart"><h3>${title}</h3><svg viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
   }
 
@@ -63,8 +63,8 @@
     items.forEach((it, i) => {
       const x = L + i * (bw + gap), h = (it.value / top) * (H - T - B);
       g += `<rect x="${x}" y="${H - B - h}" width="${bw}" height="${h}" fill="${it.color}" rx="3"/>` +
-           `<text x="${x + bw / 2}" y="${H - B - h - 5}" fill="#f1f5f9" font-size="12" text-anchor="middle">${it.label}</text>` +
-           `<text x="${x + bw / 2}" y="${H - 14}" fill="#9d8fc7" font-size="11" text-anchor="middle">${it.name}</text>`;
+           `<text x="${x + bw / 2}" y="${H - B - h - 5}" fill="#F5F5F5" font-size="12" text-anchor="middle">${it.label}</text>` +
+           `<text x="${x + bw / 2}" y="${H - 14}" fill="#a9a4b8" font-size="11" text-anchor="middle">${it.name}</text>`;
     });
     return `<div class="chart"><h3>${title}</h3><svg viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
   }
