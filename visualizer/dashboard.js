@@ -40,7 +40,7 @@
     let g = '';
     for (let i = 0; i <= 4; i++) {
       const v = (yMax * i) / 4;
-      g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(57,255,20,.1)"/>` +
+      g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(165,107,224,.14)"/>` +
            `<text x="${L - 6}" y="${y(v) + 4}" fill="#a9a4b8" font-size="11" text-anchor="end">${fmt(v)}</text>`;
     }
     Object.entries(events).forEach(([round, name]) => {
