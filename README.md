@@ -53,7 +53,7 @@ python -m ripx.server --open
 
 The package lives in `src/ripx`, so `python -m ripx...` commands (including `python -m ripx.server` and `python -m ripx.benchmark`) need the one-time `python -m pip install -e .` first; without it Python reports `No module named 'ripx'`. `run_live_simulator.py` adds `src/` to the path itself. In a GitHub Codespace, use `python run_live_simulator.py --port 8080` and open the forwarded port from the Ports tab (the browser cannot be opened automatically there).
 
-The **Dashboard** (`/dashboard.html`, cyberpunk-neon themed with animated KPI tiles; it respects `prefers-reduced-motion`, linked from the top of the simulator) has one button per feature: a side-by-side standard RIP vs RIP-X run on identical failures with live message, repair-time, black-hole and loop counters and charts; a traffic-engineering demo; and the benchmark (saved results, or run a new one from the page).
+The **Dashboard** (`/dashboard.html`, dark theme with neon accents and animated KPI tiles and charts; it respects `prefers-reduced-motion`, linked from the top of the simulator) has one button per feature: a side-by-side standard RIP vs RIP-X run on identical failures with live message, repair-time, black-hole and loop counters and charts; a traffic-engineering demo; and the benchmark (saved results, or run a new one from the page).
 
 The page shows `Engine: Python` when it is connected. Opening `visualizer/index.html` directly (without the server) falls back to a standalone in-browser engine that supports only baseline RIP. The Protocol Profile menu (baseline, standard RIP, RIP-X) and the Split Horizon toggle need the Python engine.
 
