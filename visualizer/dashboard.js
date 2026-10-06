@@ -2,7 +2,8 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const COLORS = { rip: '#f59e0b', ripx: '#06b6d4' };
+  const COLORS = { rip: '#ffb400', ripx: '#00f0ff' };
+  const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fmt = (n, d = 0) => Number(n).toLocaleString(undefined, { maximumFractionDigits: d });
 
   async function api(path, body) {
@@ -31,18 +32,18 @@
     let g = '';
     for (let i = 0; i <= 4; i++) {
       const v = (yMax * i) / 4;
-      g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(148,163,184,.15)"/>` +
-           `<text x="${L - 6}" y="${y(v) + 4}" fill="#94a3b8" font-size="10" text-anchor="end">${fmt(v)}</text>`;
+      g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(0,240,255,.1)"/>` +
+           `<text x="${L - 6}" y="${y(v) + 4}" fill="#9d8fc7" font-size="10" text-anchor="end">${fmt(v)}</text>`;
     }
     Object.entries(events).forEach(([round, name]) => {
-      g += `<line x1="${x(round)}" x2="${x(round)}" y1="${T}" y2="${H - B}" stroke="rgba(148,163,184,.35)" stroke-dasharray="2 4"/>` +
+      g += `<line x1="${x(round)}" x2="${x(round)}" y1="${T}" y2="${H - B}" stroke="rgba(255,43,214,.4)" stroke-dasharray="2 4"/>` +
            `<text x="${x(round) + 3}" y="${T + 10}" fill="#64748b" font-size="9">${name.replace('_', ' ')}</text>`;
     });
     ['rip', 'ripx'].forEach(k => {
       const d = series[k].map((p, i) => `${i ? 'L' : 'M'}${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`).join('');
-      g += `<path d="${d}" fill="none" stroke="${COLORS[k]}" stroke-width="1.8"/>`;
+      g += `<path class="line" pathLength="1" d="${d}" fill="none" stroke="${COLORS[k]}" style="color:${COLORS[k]}" stroke-width="1.8"/>`;
     });
-    g += `<text x="${(L + W) / 2}" y="${H - 6}" fill="#94a3b8" font-size="10" text-anchor="middle">round</text>`;
+    g += `<text x="${(L + W) / 2}" y="${H - 6}" fill="#9d8fc7" font-size="10" text-anchor="middle">round</text>`;
     return `<div class="chart"><h3>${title}</h3><svg viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
   }
 
@@ -55,13 +56,74 @@
       const x = L + i * (bw + gap), h = (it.value / top) * (H - T - B);
       g += `<rect x="${x}" y="${H - B - h}" width="${bw}" height="${h}" fill="${it.color}" rx="3"/>` +
            `<text x="${x + bw / 2}" y="${H - B - h - 5}" fill="#f1f5f9" font-size="12" text-anchor="middle">${it.label}</text>` +
-           `<text x="${x + bw / 2}" y="${H - 14}" fill="#94a3b8" font-size="11" text-anchor="middle">${it.name}</text>`;
+           `<text x="${x + bw / 2}" y="${H - 14}" fill="#9d8fc7" font-size="11" text-anchor="middle">${it.name}</text>`;
     });
     return `<div class="chart"><h3>${title}</h3><svg viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
   }
 
-  const card = (k, v, d, cls) =>
-    `<div class="card"><div class="k">${k}</div><div class="v">${v}</div><div class="d ${cls || 'flat'}">${d || ''}</div></div>`;
+  // ---- KPI tiles ---------------------------------------------------------
+  // One tile = label, animated before -> after numbers, an arc gauge showing the change, two bars, and a verdict line.
+  // `lower` says whether a smaller "after" is the good direction. Values may be null (shown as "n/c").
+  const ARC = 'M 25 45 A 20 20 0 1 1 45 25';  // 270-degree arc, drawn with pathLength=1
+  let tileCount = 0;
+  function kpi({ label, before, after, digits = 0, unit = '', lower = true, note = '', verdict }) {
+    const num = Number.isFinite(before) && Number.isFinite(after);
+    const better = !num ? null : (lower ? after <= before : after >= before);
+    const cls = verdict || (better === null ? 'flat' : (after === before ? 'flat' : (better ? 'good' : 'bad')));
+    const top = num ? Math.max(before, after, 1e-9) : 1;
+    const change = num && before !== 0 ? (after - before) / Math.abs(before) * 100 : null;
+    // gauge: how large RIP-X is relative to the larger of the two values
+    const off = num ? (1 - Math.min(1, after / top)).toFixed(3) : 1;
+    const centre = change === null ? '–' : `${change > 0 ? '+' : ''}${fmt(change, Math.abs(change) < 10 ? 1 : 0)}%`;
+    const spec = v => (Number.isFinite(v) ? `data-to="${v}" data-d="${digits}"` : '');
+    const show = v => (Number.isFinite(v) ? fmt(v, digits) : 'n/c');
+    return `<div class="card kpi ${cls}" style="--i:${tileCount++}">
+      <svg class="gauge" viewBox="0 0 70 70" style="--off:${off}"><path class="track" d="${ARC}" fill="none" stroke-width="5" stroke-linecap="round" pathLength="1"/>` +
+      `<path class="arc" d="${ARC}" fill="none" stroke-width="5" stroke-linecap="round" pathLength="1"/><text x="35" y="39">${centre}</text></svg>
+      <div class="k">${label}</div>
+      <div class="vals"><span class="a" ${spec(before)}>${show(before)}</span><span class="arrow">→</span><span class="b" ${spec(after)}>${show(after)}</span><span class="flat">${unit}</span></div>
+      ${num ? `<div class="bars"><i class="ra" style="--w:${(before / top) * 100}%"></i><i class="rb" style="--w:${(after / top) * 100}%"></i></div>` : ''}
+      <div class="d">${note}</div></div>`;
+  }
+
+  // Animate numbers (count-up with a short "decode" scramble), gauges and bars once the tiles are in the DOM.
+  function animateKpis(root) {
+    tileCount = 0;
+    const tiles = [...root.querySelectorAll('.kpi')];
+    const place = el => { const to = +el.dataset.to; el.textContent = fmt(to, +el.dataset.d); };
+    if (REDUCED) { tiles.forEach(t => { t.classList.add('on'); t.querySelectorAll('[data-to]').forEach(place); t.querySelector('.gauge')?.classList.add('on'); }); return; }
+    tiles.forEach((t, i) => setTimeout(() => {
+      t.classList.add('on'); t.querySelector('.gauge')?.classList.add('on');
+      t.querySelectorAll('[data-to]').forEach(el => {
+        const to = +el.dataset.to, d = +el.dataset.d, t0 = performance.now(), dur = 1100;
+        (function tick(now) {
+          const p = Math.min(1, (now - t0) / dur), eased = 1 - Math.pow(1 - p, 4);
+          let text = fmt(to * eased, d);
+          if (p < .6) text = text.replace(/\d/g, c => (Math.random() < .5 ? c : String(Math.floor(Math.random() * 10))));  // decode flicker
+          el.textContent = text;
+          if (p < 1) requestAnimationFrame(tick);
+        })(t0);
+      });
+    }, i * 70));
+  }
+
+  // Pointer spotlight + 3D tilt, one delegated listener, throttled to animation frames.
+  if (!REDUCED) {
+    let frame = 0;
+    document.addEventListener('pointermove', ev => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const tile = ev.target.closest?.('.kpi');
+        document.querySelectorAll('.kpi.hot').forEach(t => { if (t !== tile) { t.classList.remove('hot'); t.style.setProperty('--rx', '0deg'); t.style.setProperty('--ry', '0deg'); } });
+        if (!tile) return;
+        const r = tile.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width, y = (ev.clientY - r.top) / r.height;
+        tile.classList.add('hot');
+        tile.style.setProperty('--mx', `${x * 100}%`); tile.style.setProperty('--my', `${y * 100}%`);
+        tile.style.setProperty('--rx', `${((0.5 - y) * 9).toFixed(2)}deg`); tile.style.setProperty('--ry', `${((x - 0.5) * 11).toFixed(2)}deg`);
+      });
+    }, { passive: true });
+  }
 
   // ---- 1. comparison -------------------------------------------------------
   function convergenceRounds(run, start, end) {
@@ -83,13 +145,15 @@
     const black = [rip, ripx].map(r => r.blackhole_pair_rounds);
     const saved = 100 * (1 - msgs[1] / msgs[0]);
     const label = c => (c === null ? 'not converged' : `${c} rounds`);
-    $('cmpCards').innerHTML =
-      card('Control messages', `${fmt(msgs[0])} → ${fmt(msgs[1])}`, `RIP-X sent ${fmt(Math.abs(saved), 0)}% ${saved >= 0 ? 'fewer' : 'more'}`, saved > 0 ? 'good' : 'bad') +
-      card('Link failure repaired in', `${label(cr[0])} → ${label(cx[0])}`, 'standard RIP → RIP-X') +
-      card('Router failure repaired in', `${label(cr[2])} → ${label(cx[2])}`, 'standard RIP → RIP-X') +
-      card('Black-holed pair-rounds', `${fmt(black[0])} → ${fmt(black[1])}`, black[1] > black[0] ? 'RIP-X drops more traffic while repairing' : 'RIP-X drops no more traffic', black[1] > black[0] ? 'bad' : 'good') +
-      card('Looping pair-rounds', `${fmt(rip.loop_pair_rounds)} → ${fmt(ripx.loop_pair_rounds)}`, '', ripx.loop_pair_rounds <= rip.loop_pair_rounds ? 'good' : 'bad') +
-      card('Route changes', `${fmt(rip.route_changes)} → ${fmt(ripx.route_changes)}`, 'routing churn');
+    $('cmpCards').innerHTML = [
+      kpi({ label: 'Control messages', before: msgs[0], after: msgs[1], note: `RIP-X sent ${fmt(Math.abs(saved), 0)}% ${saved >= 0 ? 'fewer' : 'more'}` }),
+      kpi({ label: 'Link failure repaired in', before: cr[0], after: cx[0], unit: 'rounds', note: 'standard RIP → RIP-X' }),
+      kpi({ label: 'Router failure repaired in', before: cr[2], after: cx[2], unit: 'rounds', note: 'standard RIP → RIP-X' }),
+      kpi({ label: 'Black-holed pair-rounds', before: black[0], after: black[1], note: black[1] > black[0] ? '⚠ RIP-X drops more traffic while repairing' : 'RIP-X drops no more traffic' }),
+      kpi({ label: 'Looping pair-rounds', before: rip.loop_pair_rounds, after: ripx.loop_pair_rounds, note: 'forwarding loops during repair' }),
+      kpi({ label: 'Route changes', before: rip.route_changes, after: ripx.route_changes, note: 'routing churn' })
+    ].join('');
+    animateKpis($('cmpCards'));
     const pick = f => ({ rip: rip.series.map(p => ({ x: p.round, y: f(p) })), ripx: ripx.series.map(p => ({ x: p.round, y: f(p) })) });
     $('cmpCharts').innerHTML =
       lineChart('Cumulative control messages', pick(p => p.messages), events) +
@@ -106,11 +170,13 @@
   $('teGo').onclick = () => busy($('teGo'), $('teErr'), async () => {
     const t = await api('/api/demo/traffic', { seed: +$('teSeed').value });
     const r = t.rip, x = t.ripx;
-    $('teCards').innerHTML =
-      card('Delivered / offered traffic', `${fmt(100 * r.delivered_ratio, 1)}% → ${fmt(100 * x.delivered_ratio, 1)}%`, x.delivered_ratio >= r.delivered_ratio ? 'RIP-X delivers more' : 'RIP-X delivers less', x.delivered_ratio >= r.delivered_ratio ? 'good' : 'bad') +
-      card('Peak link utilization', `${fmt(r.maximum_utilization, 2)} → ${fmt(x.maximum_utilization, 2)}`, '1.00 = link full', x.maximum_utilization <= r.maximum_utilization ? 'good' : 'bad') +
-      card('Mean path length', `${fmt(r.mean_path_hops, 2)} → ${fmt(x.mean_path_hops, 2)} hops`, 'longer detours are the price') +
-      card('Extra control messages', fmt(x.te_control_messages), `${x.epochs_run} epochs, best = epoch ${x.selected_epoch}`);
+    $('teCards').innerHTML = [
+      kpi({ label: 'Delivered / offered traffic', before: 100 * r.delivered_ratio, after: 100 * x.delivered_ratio, digits: 1, unit: '%', lower: false, note: x.delivered_ratio >= r.delivered_ratio ? 'RIP-X delivers more' : '⚠ RIP-X delivers less' }),
+      kpi({ label: 'Peak link utilization', before: r.maximum_utilization, after: x.maximum_utilization, digits: 2, note: '1.00 = link full' }),
+      kpi({ label: 'Mean path length', before: r.mean_path_hops, after: x.mean_path_hops, digits: 2, unit: 'hops', verdict: 'flat', note: 'longer detours are the price' }),
+      kpi({ label: 'Extra control messages', before: 0, after: x.te_control_messages, verdict: 'flat', note: `${x.epochs_run} epochs, best = epoch ${x.selected_epoch}` })
+    ].join('');
+    animateKpis($('teCards'));
     $('teTable').hidden = false;
     $('teTable').querySelector('tbody').innerHTML = x.epochs.map(e =>
       `<tr><td>${e.epoch}${e.epoch === x.selected_epoch ? ' ✓ chosen' : ''}</td><td class="num">${fmt(e.delivered_mbps, 1)}</td>` +

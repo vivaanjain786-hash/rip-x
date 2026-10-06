@@ -82,3 +82,27 @@ def test_dashboard_renders_comparison_and_traffic_engineering(page):
     assert "%" in page.inner_text("#teCards")
     assert "Traffic engineering" in page.inner_text("#bm") or "seeds" in page.inner_text("#bmBody")
     assert page.errors == []
+
+
+def test_dashboard_kpi_tiles_count_up_to_the_measured_values(page):
+    base = page.url.rsplit("/", 1)[0]
+    page.goto(base + "/dashboard.html")
+    page.wait_for_selector("#cmpCards .kpi", timeout=60000)
+    assert page.locator("#cmpCards .kpi").count() == 6
+    page.wait_for_timeout(2500)  # let the count-up finish
+    settled = page.eval_on_selector_all("#cmpCards [data-to]", "els => els.map(e => [e.textContent, Number(e.dataset.to)])")
+    assert settled
+    for text, value in settled:
+        assert text.replace(",", "") == str(value) or abs(float(text.replace(",", "")) - value) < 0.051
+    assert page.errors == []
+
+
+def test_dashboard_respects_reduced_motion(page):
+    page.emulate_media(reduced_motion="reduce")
+    page.goto(page.url.rsplit("/", 1)[0] + "/dashboard.html")
+    page.wait_for_selector("#cmpCards .kpi.on", timeout=60000)
+    # With reduced motion the final numbers are in place immediately and no tile is animated by script.
+    first = page.eval_on_selector("#cmpCards .kpi .b", "e => [e.textContent, e.dataset.to]")
+    assert first[0].replace(",", "") == first[1]
+    assert page.evaluate("getComputedStyle(document.querySelector('.kpi'), '::before').animationName") == "none"
+    assert page.errors == []
