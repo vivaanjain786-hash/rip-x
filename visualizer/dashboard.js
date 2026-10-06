@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const COLORS = { rip: '#ffb547', ripx: '#3de8e0' };
+  const COLORS = { rip: '#ffb400', ripx: '#00f0ff' };
   const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fmt = (n, d = 0) => Number(n).toLocaleString(undefined, { maximumFractionDigits: d });
 
@@ -32,20 +32,18 @@
     let g = '';
     for (let i = 0; i <= 4; i++) {
       const v = (yMax * i) / 4;
-      g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="grid"/>` +
-           `<text x="${L - 6}" y="${y(v) + 4}" fill="#8e96b3" font-size="10" text-anchor="end">${fmt(v)}</text>`;
+      g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(0,240,255,.1)"/>` +
+           `<text x="${L - 6}" y="${y(v) + 4}" fill="#9d8fc7" font-size="10" text-anchor="end">${fmt(v)}</text>`;
     }
     Object.entries(events).forEach(([round, name]) => {
-      g += `<line x1="${x(round)}" x2="${x(round)}" y1="${T}" y2="${H - B}" stroke="rgba(139,108,255,.55)" stroke-dasharray="2 4"/>` +
-           `<text x="${x(round) + 3}" y="${T + 10}" fill="#5d6584" font-size="9">${name.replace('_', ' ')}</text>`;
+      g += `<line x1="${x(round)}" x2="${x(round)}" y1="${T}" y2="${H - B}" stroke="rgba(255,43,214,.4)" stroke-dasharray="2 4"/>` +
+           `<text x="${x(round) + 3}" y="${T + 10}" fill="#64748b" font-size="9">${name.replace('_', ' ')}</text>`;
     });
     ['rip', 'ripx'].forEach(k => {
       const d = series[k].map((p, i) => `${i ? 'L' : 'M'}${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`).join('');
-      const last = series[k][series[k].length - 1];
-      g += `<path class="area" d="${d}L${x(last.x).toFixed(1)},${y(0)}L${x(0)},${y(0)}Z" fill="${COLORS[k]}" fill-opacity=".07"/>` +
-           `<path class="line" pathLength="1" d="${d}" fill="none" stroke="${COLORS[k]}" stroke-width="1.8" stroke-linejoin="round"/>`;
+      g += `<path class="line" pathLength="1" d="${d}" fill="none" stroke="${COLORS[k]}" style="color:${COLORS[k]}" stroke-width="1.8"/>`;
     });
-    g += `<text x="${(L + W) / 2}" y="${H - 6}" fill="#8e96b3" font-size="10" text-anchor="middle">round</text>`;
+    g += `<text x="${(L + W) / 2}" y="${H - 6}" fill="#9d8fc7" font-size="10" text-anchor="middle">round</text>`;
     return `<div class="chart"><h3>${title}</h3><svg viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
   }
 
@@ -56,9 +54,9 @@
     let g = '';
     items.forEach((it, i) => {
       const x = L + i * (bw + gap), h = (it.value / top) * (H - T - B);
-      g += `<rect class="bar" x="${x}" y="${H - B - h}" width="${bw}" height="${h}" fill="${it.color}" rx="3"/>` +
-           `<text x="${x + bw / 2}" y="${H - B - h - 5}" fill="#e8ebf5" font-size="12" text-anchor="middle">${it.label}</text>` +
-           `<text x="${x + bw / 2}" y="${H - 14}" fill="#8e96b3" font-size="11" text-anchor="middle">${it.name}</text>`;
+      g += `<rect x="${x}" y="${H - B - h}" width="${bw}" height="${h}" fill="${it.color}" rx="3"/>` +
+           `<text x="${x + bw / 2}" y="${H - B - h - 5}" fill="#f1f5f9" font-size="12" text-anchor="middle">${it.label}</text>` +
+           `<text x="${x + bw / 2}" y="${H - 14}" fill="#9d8fc7" font-size="11" text-anchor="middle">${it.name}</text>`;
     });
     return `<div class="chart"><h3>${title}</h3><svg viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
   }
@@ -88,7 +86,7 @@
       <div class="d">${note}</div></div>`;
   }
 
-  // Animate numbers (count-up), gauges and bars once the tiles are in the DOM.
+  // Animate numbers (count-up with a short "decode" scramble), gauges and bars once the tiles are in the DOM.
   function animateKpis(root) {
     tileCount = 0;
     const tiles = [...root.querySelectorAll('.kpi')];
@@ -100,14 +98,16 @@
         const to = +el.dataset.to, d = +el.dataset.d, t0 = performance.now(), dur = 1100;
         (function tick(now) {
           const p = Math.min(1, (now - t0) / dur), eased = 1 - Math.pow(1 - p, 4);
-          el.textContent = fmt(to * eased, d);
+          let text = fmt(to * eased, d);
+          if (p < .6) text = text.replace(/\d/g, c => (Math.random() < .5 ? c : String(Math.floor(Math.random() * 10))));  // decode flicker
+          el.textContent = text;
           if (p < 1) requestAnimationFrame(tick);
         })(t0);
       });
     }, i * 70));
   }
 
-  // Hover spotlight: one delegated listener, throttled to animation frames.
+  // Pointer spotlight + 3D tilt, one delegated listener, throttled to animation frames.
   if (!REDUCED) {
     let frame = 0;
     document.addEventListener('pointermove', ev => {
@@ -115,10 +115,12 @@
       frame = requestAnimationFrame(() => {
         frame = 0;
         const tile = ev.target.closest?.('.kpi');
+        document.querySelectorAll('.kpi.hot').forEach(t => { if (t !== tile) { t.classList.remove('hot'); t.style.setProperty('--rx', '0deg'); t.style.setProperty('--ry', '0deg'); } });
         if (!tile) return;
-        const r = tile.getBoundingClientRect();
-        tile.style.setProperty('--mx', `${((ev.clientX - r.left) / r.width * 100).toFixed(1)}%`);
-        tile.style.setProperty('--my', `${((ev.clientY - r.top) / r.height * 100).toFixed(1)}%`);
+        const r = tile.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width, y = (ev.clientY - r.top) / r.height;
+        tile.classList.add('hot');
+        tile.style.setProperty('--mx', `${x * 100}%`); tile.style.setProperty('--my', `${y * 100}%`);
+        tile.style.setProperty('--rx', `${((0.5 - y) * 9).toFixed(2)}deg`); tile.style.setProperty('--ry', `${((x - 0.5) * 11).toFixed(2)}deg`);
       });
     }, { passive: true });
   }
