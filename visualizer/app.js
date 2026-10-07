@@ -619,24 +619,24 @@
       ctx.lineTo(v.x, v.y);
 
       if (link.up && u.up && v.up) {
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+        ctx.strokeStyle = 'rgba(107, 181, 228, 0.45)';
         ctx.lineWidth = 3;
         ctx.stroke();
 
         // Subtle link pulse
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
+        ctx.strokeStyle = 'rgba(107, 181, 228, 0.15)';
         ctx.lineWidth = 8;
         ctx.stroke();
 
         // RIP-X link cost (only shown when it differs from one hop)
         if (link.cost && link.cost > 1) {
-          ctx.fillStyle = '#fbbf24';
+          ctx.fillStyle = '#FFB86B';
           ctx.font = 'bold 11px JetBrains Mono';
           ctx.textAlign = 'center';
           ctx.fillText(`cost ${link.cost}`, (u.x + v.x) / 2, (u.y + v.y) / 2 - 8);
         }
       } else {
-        ctx.strokeStyle = 'rgba(244, 63, 94, 0.6)';
+        ctx.strokeStyle = 'rgba(255, 107, 122, 0.6)';
         ctx.lineWidth = 2.5;
         ctx.setLineDash([6, 6]);
         ctx.stroke();
@@ -644,7 +644,7 @@
         // Cross marker on broken link
         const mx = (u.x + v.x) / 2;
         const my = (u.y + v.y) / 2;
-        ctx.fillStyle = '#f43f5e';
+        ctx.fillStyle = '#FF6B7A';
         ctx.font = 'bold 12px Inter';
         ctx.textAlign = 'center';
         ctx.fillText('✖ LINK DOWN', mx, my - 6);
@@ -664,9 +664,9 @@
       ctx.save();
       if (p.type === 'rip') {
         // Glowing cyan envelope / circle
-        ctx.shadowColor = '#06b6d4';
+        ctx.shadowColor = '#6BB5E4';
         ctx.shadowBlur = 12;
-        ctx.fillStyle = '#38bdf8';
+        ctx.fillStyle = '#6BB5E4';
         ctx.beginPath();
         ctx.arc(px, py, 6, 0, Math.PI * 2);
         ctx.fill();
@@ -674,21 +674,21 @@
         // Small message label
         ctx.shadowBlur = 0;
         ctx.font = '9px JetBrains Mono';
-        ctx.fillStyle = '#e0f2fe';
+        ctx.fillStyle = '#F1F1F1';
         ctx.textAlign = 'center';
         ctx.fillText('RIP', px, py - 9);
       } else {
         // Emerald Data Packet
-        ctx.shadowColor = '#10b981';
+        ctx.shadowColor = '#FFB86B';
         ctx.shadowBlur = 15;
-        ctx.fillStyle = '#34d399';
+        ctx.fillStyle = '#FFB86B';
         ctx.beginPath();
         ctx.arc(px, py, 8, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.shadowBlur = 0;
         ctx.font = 'bold 10px JetBrains Mono';
-        ctx.fillStyle = '#a7f3d0';
+        ctx.fillStyle = '#F1F1F1';
         ctx.textAlign = 'center';
         ctx.fillText('DATA', px, py - 11);
       }
@@ -704,7 +704,7 @@
       if (isSelected) {
         ctx.beginPath();
         ctx.arc(r.x, r.y, NODE_RADIUS + 7, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(6, 182, 212, 0.9)';
+        ctx.strokeStyle = 'rgba(107, 181, 228, 0.9)';
         ctx.lineWidth = 2.5;
         ctx.setLineDash([4, 4]);
         ctx.stroke();
@@ -716,26 +716,26 @@
 
       if (r.up) {
         const grad = ctx.createRadialGradient(r.x - 6, r.y - 6, 4, r.x, r.y, NODE_RADIUS);
-        grad.addColorStop(0, '#1e293b');
-        grad.addColorStop(1, '#0f172a');
+        grad.addColorStop(0, '#282828');
+        grad.addColorStop(1, '#1E1E1E');
         ctx.fillStyle = grad;
         ctx.fill();
 
-        ctx.strokeStyle = isSelected ? '#38bdf8' : 'rgba(56, 189, 248, 0.7)';
+        ctx.strokeStyle = isSelected ? '#6BB5E4' : 'rgba(107, 181, 228, 0.7)';
         ctx.lineWidth = isSelected ? 3 : 2;
         ctx.stroke();
 
         // Cisco 4-arrow Router Symbol Icon
-        drawRouterSymbol(r.x, r.y, '#38bdf8');
+        drawRouterSymbol(r.x, r.y, '#6BB5E4');
       } else {
-        ctx.fillStyle = '#270811';
+        ctx.fillStyle = '#331111';
         ctx.fill();
-        ctx.strokeStyle = '#f43f5e';
+        ctx.strokeStyle = '#FF6B7A';
         ctx.lineWidth = 2.5;
         ctx.stroke();
 
         // Failed X icon
-        ctx.strokeStyle = '#f43f5e';
+        ctx.strokeStyle = '#FF6B7A';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(r.x - 10, r.y - 10);
@@ -747,14 +747,14 @@
 
       // Label below router
       ctx.font = 'bold 12px Inter';
-      ctx.fillStyle = r.up ? '#ffffff' : '#fda4af';
+      ctx.fillStyle = r.up ? '#ffffff' : '#FF6B7A';
       ctx.textAlign = 'center';
       ctx.fillText(r.name, r.x, r.y + NODE_RADIUS + 16);
 
       // Status indicator dot on top right of node
       ctx.beginPath();
       ctx.arc(r.x + NODE_RADIUS * 0.7, r.y - NODE_RADIUS * 0.7, 5, 0, Math.PI * 2);
-      ctx.fillStyle = r.up ? '#10b981' : '#f43f5e';
+      ctx.fillStyle = r.up ? '#FFB86B' : '#FF6B7A';
       ctx.fill();
 
       ctx.restore();
@@ -858,7 +858,7 @@
       // Render Routing Table
       routingTableBody.innerHTML = '';
       if (routes.length === 0) {
-        routingTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#64748b;">No routing entries</td></tr>`;
+        routingTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:rgba(241, 241, 241, 0.46);">No routing entries</td></tr>`;
       } else {
         routes.sort((a, b) => a[0].localeCompare(b[0])).forEach(([dest, entry]) => {
           const tr = document.createElement('tr');
