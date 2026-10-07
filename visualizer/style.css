@@ -95,6 +95,12 @@ body::after {
   z-index: 10;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -127,19 +133,37 @@ body::after {
 .header-status {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+}
+
+.header-status.vertical {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.left-sidebar {
+  width: 350px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-shadow: var(--shadow-panel);
+  z-index: 8;
+  overflow-y: auto;
 }
 
 .status-chip {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
+  padding: 8px 16px;
   border-radius: 9999px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   background: var(--bg-tertiary);
   border: 1px solid var(--panel-border);
+  color: var(--text-main);
 }
 
 .indicator {
@@ -183,9 +207,9 @@ body::after {
   display: flex;
   flex-direction: column;
   background: var(--bg-tertiary);
-  padding: 4px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
 }
 
 .metric-chip .metric-label {
@@ -193,10 +217,11 @@ body::after {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-dim);
+  font-weight: 700;
 }
 
 .metric-chip .metric-value {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   font-family: var(--font-mono);
   color: var(--accent-cyan);
@@ -220,6 +245,21 @@ body::after {
   gap: 10px;
 }
 
+details.collapsible-settings summary::marker {
+  display: none;
+  content: "";
+}
+details.collapsible-settings summary::-webkit-details-marker {
+  display: none;
+}
+details.collapsible-settings[open] summary span {
+  transform: rotate(180deg);
+}
+details.collapsible-settings summary span {
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
 .group-label {
   font-size: 12px;
   font-weight: 600;
@@ -237,7 +277,7 @@ body::after {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
+  padding: 6px 14px;
   font-size: 13px;
   font-weight: 600;
   font-family: var(--font-sans);
@@ -333,7 +373,7 @@ body::after {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   padding: 4px 8px;
   border-radius: 4px;
@@ -358,6 +398,32 @@ body::after {
 }
 .form-select:focus {
   border-color: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(107, 181, 228, 0.4);
+}
+
+.form-select option {
+  background: var(--bg-secondary);
+  color: var(--text-main);
+}
+.form-select option:checked {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+#topologySelect {
+  background: var(--accent-cyan);
+  color: var(--bg-primary);
+  border: none;
+  font-weight: 700;
+  box-shadow: var(--shadow-glow);
+}
+#topologySelect option {
+  background: var(--bg-secondary);
+  color: var(--text-main);
+}
+#topologySelect option:checked {
+  background: var(--accent-cyan);
+  color: var(--bg-primary);
 }
 
 .toggle-wrapper {
@@ -512,7 +578,7 @@ input:checked + .slider:before {
 
 /* Sidebar */
 .sidebar {
-  width: 420px;
+  width: 350px;
   background: var(--bg-secondary);
   border-left: 1px solid var(--panel-border);
   display: flex;
